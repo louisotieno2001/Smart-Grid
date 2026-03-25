@@ -4,10 +4,10 @@
 Frontend integration now targets the consolidated `/api/v1` backend.
 
 ## Client implementation
-Active API client: `ui/src/lib/api.js`
+Active API client: `ui/src/api/client.ts`
 
 ## Mapped frontend flows
-- Authentication: `POST /api/v1/auth/dev-token`
+- Authentication: `POST /api/v1/auth/login`, `GET /api/v1/auth/me`, `POST /api/v1/auth/logout`
 - Site creation/list/detail: `/api/v1/sites`
 - Device creation: `POST /api/v1/sites/{site_id}/devices`
 - Telemetry ingest: `POST /api/v1/telemetry/ingest`

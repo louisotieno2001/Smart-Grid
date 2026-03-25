@@ -7,7 +7,6 @@ WORKDIR /app
 
 COPY pyproject.toml README.md /app/
 COPY src /app/src
-COPY openapi /app/openapi
 COPY data /app/data
 COPY docs /app/docs
 COPY scripts /app/scripts

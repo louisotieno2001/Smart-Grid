@@ -12,6 +12,7 @@ The repository now treats the control-loop backend as canonical and retires the 
 - `docs/EDGE_GATEWAY.md`
 - `docs/SIMULATION.md`
 - `docs/API.md`
+- `docs/AUTH.md`
 - `docs/MIGRATION_NOTES.md`
 
 ## Key Assets
@@ -65,6 +66,8 @@ Current repository state:
 
 ## API quick checks
 - `GET /health`
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/me`
 - `POST /api/v1/auth/dev-token`
 - `POST /api/v1/sites`
 - `POST /api/v1/telemetry/ingest`

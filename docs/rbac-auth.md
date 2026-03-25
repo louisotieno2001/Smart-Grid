@@ -13,7 +13,15 @@ Operational roles:
 
 ## Authentication methods
 - JWT bearer tokens
-- Dev token bootstrap endpoint for local usage: `POST /api/v1/auth/dev-token`
+- Email/password login endpoint: `POST /api/v1/auth/login`
+- Current user endpoint: `GET /api/v1/auth/me`
+- Logout endpoint: `POST /api/v1/auth/logout`
+- Dev token bootstrap endpoint for local usage: `POST /api/v1/auth/dev-token` (development mode only)
+
+## Local development account
+- Email: `admin@ems.local`
+- Password: `admin123!`
+- Membership role: `client_admin`
 
 ## Authorization semantics
 - Role checks at endpoint boundary via `require_roles(...)`.

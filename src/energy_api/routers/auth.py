@@ -1,13 +1,20 @@
 # Author: Jerry Onyango
-# Contribution: Provides auth bootstrap endpoint for minting development JWTs with role and tenant claims.
+# Contribution: Implements login, current-user lookup, logout behavior, and development token minting for JWT authentication.
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import os
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
-from fastapi import APIRouter, HTTPException
+import psycopg
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from energy_api.security import Principal, get_current_principal
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
@@ -20,7 +27,227 @@ ALLOWED_ROLES = {
     "ml_engineer",
     "customer_success",
     "support_analyst",
+    "admin",
+    "owner",
+    "operator",
 }
+
+
+def _db_url() -> str:
+    raw = os.getenv("EA_DATABASE_URL", "postgresql://energyallocation:energyallocation@localhost:5432/energyallocation")
+    return raw.replace("postgresql+psycopg://", "postgresql://")
+
+
+def _connect():
+    return psycopg.connect(_db_url(), autocommit=True)
+
+
+def _ensure_auth_schema() -> None:
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS password_hash TEXT")
+
+
+def _ensure_dev_seed_user() -> None:
+    if not _is_dev_mode_enabled():
+        return
+
+    seed_email = os.getenv("EA_DEV_ADMIN_EMAIL", "admin@ems.local").strip().lower()
+    seed_password = os.getenv("EA_DEV_ADMIN_PASSWORD", "admin123!")
+    seed_name = os.getenv("EA_DEV_ADMIN_NAME", "EMS Admin")
+
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id::text, password_hash FROM users WHERE lower(email) = lower(%s) LIMIT 1", (seed_email,))
+            existing_user = cur.fetchone()
+
+            if existing_user:
+                user_id = existing_user[0]
+                password_hash = existing_user[1]
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO users(email, full_name, status)
+                    VALUES (%s, %s, 'active')
+                    RETURNING id::text, password_hash
+                    """,
+                    (seed_email, seed_name),
+                )
+                created_user = cur.fetchone()
+                if not created_user:
+                    return
+                user_id = created_user[0]
+                password_hash = created_user[1]
+
+            if not password_hash:
+                cur.execute("UPDATE users SET password_hash = %s WHERE id::text = %s", (hash_password(seed_password), user_id))
+
+            cur.execute("SELECT id::text FROM organizations ORDER BY created_at ASC LIMIT 1")
+            org = cur.fetchone()
+            if org:
+                org_id = org[0]
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO organizations(name, legal_name, industry, timezone)
+                    VALUES ('Local EMS', 'Local EMS', 'energy', 'UTC')
+                    RETURNING id::text
+                    """
+                )
+                inserted_org = cur.fetchone()
+                if not inserted_org:
+                    return
+                org_id = inserted_org[0]
+
+            cur.execute(
+                """
+                SELECT 1
+                FROM user_memberships
+                WHERE user_id::text = %s AND organization_id::text = %s AND role = 'client_admin'
+                LIMIT 1
+                """,
+                (user_id, org_id),
+            )
+            membership_exists = cur.fetchone()
+            if not membership_exists:
+                cur.execute(
+                    """
+                    INSERT INTO user_memberships(user_id, organization_id, role)
+                    VALUES (%s::uuid, %s::uuid, 'client_admin')
+                    """,
+                    (user_id, org_id),
+                )
+
+
+def hash_password(password: str) -> str:
+    iterations = int(os.getenv("EA_PBKDF2_ITERATIONS", "260000"))
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    salt_b64 = base64.b64encode(salt).decode("utf-8")
+    digest_b64 = base64.b64encode(digest).decode("utf-8")
+    return f"pbkdf2_sha256${iterations}${salt_b64}${digest_b64}"
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    if password_hash.startswith("pbkdf2_sha256$"):
+        try:
+            _, iterations_raw, salt_b64, digest_b64 = password_hash.split("$", 3)
+            iterations = int(iterations_raw)
+            salt = base64.b64decode(salt_b64.encode("utf-8"))
+            expected_digest = base64.b64decode(digest_b64.encode("utf-8"))
+            candidate_digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+            return hmac.compare_digest(candidate_digest, expected_digest)
+        except (ValueError, TypeError):
+            return False
+
+    if password_hash.startswith("$2"):
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT crypt(%s, %s) = %s", (password, password_hash, password_hash))
+                row = cur.fetchone()
+                return bool(row and row[0])
+
+    return False
+
+
+def _is_dev_mode_enabled() -> bool:
+    env = os.getenv("EA_ENV", "development")
+    return _is_truthy(os.getenv("AUTH_DEV_MODE")) or _is_truthy(os.getenv("EA_ENABLE_DEV_AUTH")) or env == "development"
+
+
+def create_access_token(user: dict[str, Any]) -> str:
+    secret = os.getenv("JWT_SECRET", os.getenv("EA_JWT_SECRET", "dev-secret-change-me"))
+    algorithm = os.getenv("JWT_ALGORITHM", os.getenv("EA_JWT_ALGORITHM", "HS256"))
+    expires_in_minutes = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", os.getenv("EA_JWT_EXP_MIN", "60")))
+    now = datetime.now(UTC)
+    payload = {
+        "sub": str(user["id"]),
+        "email": user["email"],
+        "role": user["role"],
+        "roles": [user["role"]],
+        "organization_id": str(user["organization_id"]),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=expires_in_minutes)).timestamp()),
+    }
+    return jwt.encode(payload, secret, algorithm=algorithm)
+
+
+def _find_user_for_login(email: str) -> dict[str, Any] | None:
+    _ensure_auth_schema()
+    _ensure_dev_seed_user()
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                  u.id::text,
+                  u.email,
+                  COALESCE(u.full_name, '') AS full_name,
+                  COALESCE(m.role, 'viewer') AS role,
+                  m.organization_id::text,
+                  u.password_hash
+                FROM users u
+                LEFT JOIN LATERAL (
+                  SELECT role, organization_id
+                  FROM user_memberships
+                  WHERE user_id = u.id
+                  ORDER BY created_at ASC
+                  LIMIT 1
+                ) m ON true
+                WHERE lower(u.email) = lower(%s)
+                  AND u.status = 'active'
+                LIMIT 1
+                """,
+                (email,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "email": row[1],
+                "full_name": row[2],
+                "role": row[3],
+                "organization_id": row[4],
+                "password_hash": row[5],
+            }
+
+
+def _get_user_by_id(user_id: str) -> dict[str, Any] | None:
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                  u.id::text,
+                  u.email,
+                  COALESCE(u.full_name, '') AS full_name,
+                  COALESCE(m.role, 'viewer') AS role,
+                  m.organization_id::text
+                FROM users u
+                LEFT JOIN LATERAL (
+                  SELECT role, organization_id
+                  FROM user_memberships
+                  WHERE user_id = u.id
+                  ORDER BY created_at ASC
+                  LIMIT 1
+                ) m ON true
+                WHERE u.id::text = %s
+                  AND u.status = 'active'
+                LIMIT 1
+                """,
+                (user_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "email": row[1],
+                "full_name": row[2],
+                "role": row[3],
+                "organization_id": row[4],
+            }
 
 
 def _is_truthy(value: str | None) -> bool:
@@ -29,9 +256,7 @@ def _is_truthy(value: str | None) -> bool:
 
 @router.post("/dev-token")
 def mint_dev_token(payload: dict[str, Any]) -> dict[str, Any]:
-    env = os.getenv("EA_ENV", "development")
-    dev_auth_enabled = _is_truthy(os.getenv("EA_ENABLE_DEV_AUTH")) or env == "development"
-    if not dev_auth_enabled:
+    if not _is_dev_mode_enabled():
         raise HTTPException(status_code=404, detail="Not found")
 
     secret = os.getenv("EA_JWT_SECRET", "dev-secret-change-me")
@@ -61,3 +286,34 @@ def mint_dev_token(payload: dict[str, Any]) -> dict[str, Any]:
         "expires_in_minutes": expiry_minutes,
         "claims": claims,
     }
+
+
+@router.post("/login")
+def login(payload: dict[str, Any]) -> dict[str, Any]:
+    email = str(payload.get("email", "")).strip().lower()
+    password = str(payload.get("password", ""))
+    if not email or not password:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    user = _find_user_for_login(email)
+    if not user or not user.get("password_hash"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if not verify_password(password, user["password_hash"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    token = create_access_token(user)
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@router.get("/me")
+def me(principal: Principal = Depends(get_current_principal)) -> dict[str, Any]:
+    user = _get_user_by_id(principal.subject)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+
+@router.post("/logout")
+def logout(_: Principal = Depends(get_current_principal)) -> dict[str, str]:
+    return {"status": "ok"}

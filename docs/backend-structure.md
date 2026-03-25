@@ -2,7 +2,7 @@
 
 ## Service layout
 - `src/energy_api/main.py` — FastAPI bootstrap and router registration
-- `src/energy_api/routers/auth.py` — dev token endpoint (`/api/v1/auth/dev-token`)
+- `src/energy_api/routers/auth.py` — login/me/logout endpoints and dev token endpoint (`/api/v1/auth/*`)
 - `src/energy_api/routers/control_loop.py` — canonical control-loop API surface (`/api/v1`)
 - `src/energy_api/control/` — state engine, rule engine, dispatcher, repository
 - `src/energy_api/savings/service.py` — savings summary computation

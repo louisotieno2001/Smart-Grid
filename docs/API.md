@@ -3,7 +3,10 @@
 
 ## Auth
 - `/api/v1/*` endpoints use JWT role checks via `require_roles`.
-- Dev token endpoint: `POST /api/v1/auth/dev-token`.
+- Login endpoint: `POST /api/v1/auth/login`.
+- Current user endpoint: `GET /api/v1/auth/me`.
+- Logout endpoint: `POST /api/v1/auth/logout`.
+- Dev token endpoint (`POST /api/v1/auth/dev-token`) is available only when development auth mode is enabled.
 
 ## Control loop endpoints
 
