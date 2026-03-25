@@ -1,0 +1,41 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:16
+    container_name: energyallocation-postgres
+    environment:
+      POSTGRES_DB: energyallocation
+      POSTGRES_USER: energyallocation
+      POSTGRES_PASSWORD: energyallocation
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: energyallocation-api
+    env_file:
+      - .env.example
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+
+  ui:
+    image: node:20-alpine
+    container_name: energyallocation-ui
+    working_dir: /app/ui
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    volumes:
+      - .:/app
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

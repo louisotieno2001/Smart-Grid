@@ -1,0 +1,22 @@
+:root {
+  --bg:        #0b0e14;
+  --bg2:       #11151e;
+  --bg3:       #181d28;
+  --surface:   #1e2433;
+  --surfacehi: #252c3e;
+  --border:    rgba(255,255,255,0.07);
+  --borderhi:  rgba(255,255,255,0.14);
+  --text:      #e8eaf0;
+  --muted:     #7a8099;
+  --dim:       #4a5068;
+  --accent:    #00e5a0;
+  --accentd:   #00b87e;
+  --amber:     #f5a623;
+  --red:       #ff4d6d;
+  --blue:      #4d9fff;
+  --purple:    #a78bfa;
+  --mono:      'DM Mono', monospace;
+  --sans:      'Syne', sans-serif;
+  --r:         6px;
+  --r2:        10px;
+}

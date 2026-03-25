@@ -1,0 +1,60 @@
+# Python environment & packages
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+*.egg
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Python testing & linting
+.pytest_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+*.cover
+.hypothesis/
+
+# IDEs & editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node.js & UI
+node_modules/
+ui/node_modules/
+ui/dist/
+ui/.vite/
+.npm
+
+# Environment variables (keep .env.example, ignore actual .env)
+.env
+.env.local
+.env.*.local
+
+# Build outputs & caches
+output/
+.next/
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log

@@ -1,0 +1,8 @@
+repos:
+  - repo: local
+    hooks:
+      - id: python-header-check
+        name: Python header check
+        entry: .venv/bin/python scripts/check_file_headers.py
+        language: system
+        types: [python]

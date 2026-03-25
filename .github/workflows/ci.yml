@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-smoke:
+    name: API smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run API smoke
+        run: python scripts/smoke_api.py
+
+  frontend-backend-smoke:
+    name: Frontend-backend API smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run frontend-backend API smoke
+        run: python scripts/smoke_frontend_backend.py
+
+  pipeline-smoke:
+    name: Pipeline smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run pipeline smoke
+        run: python scripts/smoke_pipeline.py
+
+  postgres-store-smoke:
+    name: PostgreSQL store smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: energyallocation
+          POSTGRES_USER: energyallocation
+          POSTGRES_PASSWORD: energyallocation
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U energyallocation -d energyallocation"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=6
+
+    env:
+      EA_STORE_BACKEND: postgres
+      EA_STORE_REQUIRED: "true"
+      EA_DATABASE_URL: postgresql://energyallocation:energyallocation@localhost:5432/energyallocation
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run PostgreSQL-backed API smoke
+        run: python scripts/smoke_api.py
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ui
+        run: npm run build

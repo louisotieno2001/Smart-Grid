@@ -1,0 +1,400 @@
+{
+  "info": {
+    "name": "EnergyAllocation API",
+    "description": "Postman collection for local testing of EnergyAllocation API, including public, internal, and partner integration flows.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "8d6ed056-2fb6-4cb5-bab6-57d5fca31f8f"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000" },
+    { "key": "devToken", "value": "" },
+    { "key": "facilityId", "value": "" },
+    { "key": "importId", "value": "" },
+    { "key": "modelRunId", "value": "" },
+    { "key": "partnerId", "value": "" },
+    { "key": "keyId", "value": "" },
+    { "key": "webhookId", "value": "" },
+    { "key": "allocationId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0. Setup",
+      "item": [
+        {
+          "name": "Auth - Get Dev Token (client_admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/v1/auth/dev-token",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub\": \"usr_admin\",\n  \"roles\": [\"client_admin\", \"energy_analyst\"],\n  \"client_id\": \"cli_001\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('devToken', data.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Auth - Get Dev Token (ops_admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/v1/auth/dev-token",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub\": \"ops_admin_user\",\n  \"roles\": [\"ops_admin\"],\n  \"client_id\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('devToken', data.access_token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Health & Contract",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "GET /openapi.v1.yaml",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/openapi.v1.yaml"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Public Endpoints",
+      "item": [
+        {
+          "name": "POST /v1/public/demo-requests",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/v1/public/demo-requests",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company\": \"Acme Steel\",\n  \"contact_name\": \"Jordan Lee\",\n  \"email\": \"jordan@acme.example\",\n  \"facilities_count\": 6\n}"
+            }
+          }
+        },
+        {
+          "name": "POST /v1/public/pricing-inquiries",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/v1/public/pricing-inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company\": \"Acme Steel\",\n  \"contact_name\": \"Jordan Lee\",\n  \"email\": \"jordan@acme.example\",\n  \"requested_plan\": \"enterprise\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Core Internal Flow",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          { "key": "token", "value": "{{devToken}}", "type": "string" }
+        ]
+      },
+      "item": [
+        {
+          "name": "POST /v1/clients/cli_001/facilities",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/v1/clients/cli_001/facilities",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Duisburg Plant A\",\n  \"country\": \"DE\",\n  \"site_type\": \"manufacturing\",\n  \"production_profile\": \"24_7_heavy_industrial\",\n  \"timezone\": \"Europe/Berlin\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('facilityId', data.facility_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/facilities/{{facilityId}}/ingestion/imports",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "abc12345" }
+            ],
+            "url": "{{baseUrl}}/v1/facilities/{{facilityId}}/ingestion/imports",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"csv\",\n  \"file_id\": \"fil_hist_2025q4\",\n  \"schema_hint\": \"timestamp,power_kw,channel_id\",\n  \"time_column\": \"timestamp\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 202', function () { pm.response.to.have.status(202); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('importId', data.import_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/ingestion/imports/{{importId}}",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/ingestion/imports/{{importId}}"
+          }
+        },
+        {
+          "name": "POST /v1/facilities/{{facilityId}}/models/runs",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/v1/facilities/{{facilityId}}/models/runs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"feature_set_version\": \"fs_v12\",\n  \"model_family\": \"xgboost_iforest_ensemble\",\n  \"objective\": \"savings_recommendation\",\n  \"explainability\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 202', function () { pm.response.to.have.status(202); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('modelRunId', data.model_run_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/models/runs/{{modelRunId}}",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/models/runs/{{modelRunId}}"
+          }
+        },
+        {
+          "name": "GET /v1/facilities/{{facilityId}}/recommendations?status=active",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/facilities/{{facilityId}}/recommendations?status=active"
+          }
+        },
+        {
+          "name": "GET /v1/facilities/{{facilityId}}/drift-events",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/facilities/{{facilityId}}/drift-events"
+          }
+        },
+        {
+          "name": "GET /v1/facilities/{{facilityId}}/alerts?status=open",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/facilities/{{facilityId}}/alerts?status=open"
+          }
+        },
+        {
+          "name": "GET /v1/facilities/{{facilityId}}/retraining-jobs",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/facilities/{{facilityId}}/retraining-jobs"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Partner Integrations (Ops Admin)",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          { "key": "token", "value": "{{devToken}}", "type": "string" }
+        ]
+      },
+      "item": [
+        {
+          "name": "POST /v1/integrations/partners",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/v1/integrations/partners",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"EnergyTech Analytics\",\n  \"industry\": \"SaaS\",\n  \"contact_email\": \"api@energytech.com\",\n  \"contact_name\": \"Sarah Chen\",\n  \"scopes\": [\"read:facilities\", \"read:recommendations\", \"write:webhooks\"]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('partnerId', data.partner_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/integrations/partners/{{partnerId}}",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/integrations/partners/{{partnerId}}"
+          }
+        },
+        {
+          "name": "POST /v1/integrations/partners/{{partnerId}}/keys",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/v1/integrations/partners/{{partnerId}}/keys",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Production Key Q1 2026\",\n  \"scopes\": [\"read:facilities\", \"read:recommendations\"]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('keyId', data.key_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/integrations/partners/{{partnerId}}/webhooks",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/v1/integrations/partners/{{partnerId}}/webhooks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://yourapi.example.com/webhooks/energy-data\",\n  \"description\": \"Real-time facility and recommendation updates\",\n  \"events\": [\"ingestion.import_completed\", \"model.run_completed\", \"recommendation.created\", \"drift.detected\"],\n  \"max_retries\": 5,\n  \"backoff_seconds\": 60\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('webhookId', data.webhook_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/integrations/partners/{{partnerId}}/allocations",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/v1/integrations/partners/{{partnerId}}/allocations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"cli_001\",\n  \"scopes\": [\"read:facilities\", \"read:recommendations\"],\n  \"read_only\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('allocationId', data.allocation_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/integrations/partners/{{partnerId}}/usage",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/integrations/partners/{{partnerId}}/usage"
+          }
+        }
+      ]
+    }
+  ]
+}
