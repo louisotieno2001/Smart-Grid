@@ -2,15 +2,13 @@
 # Contribution: Boots the FastAPI application, registers domain routers, and serves health and contract endpoints.
 from __future__ import annotations
 
-from pathlib import Path
 import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 
 from .core import configure_logging, load_settings
-from .routers import auth, ingestion, integrations, integrations_partners, modeling, monitoring, onboarding, public, recommendations
+from .routers import auth, control_loop
 
 app = FastAPI(
     title="Energy Allocation API",
@@ -32,27 +30,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(onboarding.router)
 app.include_router(auth.router)
-app.include_router(ingestion.router)
-app.include_router(modeling.router)
-app.include_router(recommendations.router)
-app.include_router(monitoring.router)
-app.include_router(integrations.router)
-app.include_router(integrations_partners.router)
-app.include_router(public.router)
+app.include_router(control_loop.router)
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
-
-
-@app.get("/openapi.v1.yaml", include_in_schema=False)
-def get_contract() -> FileResponse:
-    root = Path(__file__).resolve().parents[2]
-    contract_path = root / "openapi" / "openapi.v1.yaml"
-    return FileResponse(contract_path)
 
 
 def run() -> None:

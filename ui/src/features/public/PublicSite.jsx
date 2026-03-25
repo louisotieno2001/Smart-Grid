@@ -16,7 +16,7 @@ function Landing({ goTo }) {
   return (
     <section className="public-surface public-hero">
       <div className="public-kicker">Industrial Energy Intelligence</div>
-      <h1 className="public-title">EnergyAllocation helps multi-site operators reduce energy waste with clear, auditable actions.</h1>
+      <h1 className="public-title">SmartGrid helps multi-site operators reduce energy waste with clear, auditable actions.</h1>
       <p className="public-subtitle">
         Structured onboarding, validated data intake, ranked recommendations, and operational monitoring in one workflow.
       </p>
@@ -80,7 +80,7 @@ function Forge() {
       const result = await createPricingInquiry({
         company: "Prospective Customer",
         contact_name: "Sales Contact",
-        email: "contact@example.com",
+        email: "jerryrawlings263@gmail.com",
         requested_plan: plan,
       });
       setStatus(`Inquiry submitted: ${result.inquiry_id}`);
@@ -134,8 +134,8 @@ function Contact() {
     <section className="public-surface">
       <h2 className="public-section-title">Contact</h2>
       <div className="public-stack">
-        <p className="public-copy">Email: integration-support@energyallocation.com</p>
-        <p className="public-copy">Sales: sales@energyallocation.com</p>
+        <p className="public-copy">Email: support@smartgrid.com</p>
+        <p className="public-copy">Sales: sales@smartgrid.com</p>
         <p className="public-copy">Support hours: Mon-Fri, 08:00-18:00 CET</p>
       </div>
     </section>
@@ -147,7 +147,7 @@ function About() {
     <section className="public-surface">
       <h2 className="public-section-title">Platform</h2>
       <p className="public-copy">
-        EnergyAllocation is built for industrial teams that need deployment-ready optimization guidance, measurable savings, and transparent operations.
+        SmartGrid is built for industrial teams that need deployment-ready optimization guidance, measurable savings, and transparent operations.
       </p>
     </section>
   );
@@ -225,7 +225,7 @@ function DemoRequest() {
           <input name="facilities_count" type="number" className="form-input" />
         </div>
         <div className="form-group">
-          <label className="form-label">Annual energy spend (EUR)</label>
+          <label className="form-label">Annual energy spend (USD)</label>
           <input name="annual_energy_spend_eur" type="number" className="form-input" />
         </div>
         <div className="form-group">
@@ -257,7 +257,7 @@ export function PublicSite({ enterApp }) {
   return (
     <div className="public-root">
       <header className="public-header">
-        <div className="logo-text">EnergyAllocation</div>
+        <div className="logo-text">SmartGrid</div>
         <nav className="public-nav">
           {PUBLIC_NAV.map((item) => (
             <button key={item.id} className={`public-nav-item ${page === item.id ? "active" : ""}`} onClick={() => setPage(item.id)}>

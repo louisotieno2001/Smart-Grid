@@ -9,7 +9,7 @@ from typing import Any
 import jwt
 from fastapi import APIRouter, HTTPException
 
-router = APIRouter(prefix="/v1/auth", tags=["Auth"])
+router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
 ALLOWED_ROLES = {
     "client_admin",

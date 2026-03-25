@@ -1,34 +1,30 @@
-# Data Model and Migrations
+# Data Model and Migrations (Current)
 
 ## Source of truth
-- Primary schema migration: `db/migrations/0001_init_schema.sql`
-- Tenant RLS policy baseline: `db/migrations/0002_rls_policies.sql`
+- Base schema and policy migrations:
+  - `db/migrations/0001_init_schema.sql`
+  - `db/migrations/0002_rls_policies.sql`
+  - `db/migrations/0003_app_state_store.sql`
+- Control-loop schema migration:
+  - `db/migrations/0004_control_loop_schema.sql`
 
-## Covered entities
-The migration includes normalized tables for:
-- organizations, clients, users, user_memberships
-- facilities, connectors, appliances, channel_mappings
-- ingestion_import_jobs, feature_jobs
-- model_runs, model_artifacts, retraining_jobs
-- recommendations, recommendation_decisions, savings_realization
-- drift_events, alerts
-- demo_requests, pricing_inquiries
-- audit_logs
+## Active runtime entities
+Current control-loop runtime persists:
+- `sites`, `assets`, `devices`
+- `telemetry_streams`, `telemetry_points`, `point_mappings`
+- `control_policies`, `tariffs`
+- `optimization_runs`, `commands`, `savings_snapshots`
 
-## Data integrity
-- UUID PKs via `gen_random_uuid()`.
-- Strict FKs on tenant and operational relations.
-- Uniqueness guards for duplicate connector registrations and idempotent job creation.
-- Composite indexes for facility/time, connector/status, recommendations, and alert lifecycle.
-- Partial indexes for `active` recommendations and `open` alerts.
-
-## RLS posture
-- RLS enabled on key tenant-facing tables.
-- Policies support:
-  - internal service bypass (`app.is_internal=true`)
-  - tenant filtering via `app.current_org_id` and `app.current_client_id`
+## Data integrity posture
+- Primary and foreign keys across site/device/run data.
+- Dedupe protection for telemetry points on `(stream_id, ts)`.
+- Command idempotency support via `(site_id, idempotency_key)` uniqueness.
+- Time-series index for telemetry query efficiency.
 
 ## Migration strategy
-- Keep immutable migration files; append new migration files for changes.
-- Run migrations in CI/staging before production promotion.
-- For large data tables, add indexes concurrently in follow-up migrations where needed.
+- Keep migrations append-only.
+- Add new migrations for schema evolution.
+- Run migrations in CI/staging before production rollout.
+
+## Legacy note
+Legacy domain tables referenced by prior platform versions are historical and documented in `docs/HISTORICAL_APPENDIX.md`.

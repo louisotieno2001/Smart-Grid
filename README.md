@@ -1,35 +1,75 @@
-# Smart-Grid Platform Foundation
+# Smart-Grid Control-Loop Backend
 
-Minimal entry point for the repository. Detailed implementation, tooling, operations, and integration guidance lives in `docs/`.
+Reference implementation for a deterministic distributed energy control loop exposed under `/api/v1`.
 
-## Service Offered
-Smart-Grid is a multi-tenant energy optimization service for industrial and commercial facilities.
-It ingests meter and connector data, builds facility-level usage features, and generates allocation recommendations that reduce cost, improve utilization, and support decarbonization targets.
-The platform exposes these capabilities through a secured API and a frontend dashboard for onboarding, monitoring, alerts, recommendations, ROI analysis, and partner integrations.
+## Service Scope
+Smart-Grid ingests telemetry, builds current site state, applies rule-based optimization, dispatches commands, and computes savings snapshots.
+The repository now treats the control-loop backend as canonical and retires the previous legacy platform backend.
 
 ## Documentation
-- `docs/backend-structure.md`
-- `docs/system-architecture.md`
-- `docs/data-model-and-migrations.md`
-- `docs/deployment.md`
-- `docs/rbac-auth.md`
-- `docs/alerting-system.md`
-- `docs/pricing-and-roi.md`
-- `docs/model-production-path.md`
-- `docs/frontend-integration.md`
-- `docs/partner-integration-api.md`
-- `docs/partner-security-policy.md`
-- `docs/partner-integration-implementation.md`
-- `docs/batch-first-roadmap.md`
-- `docs/gap-analysis-and-upgrade.md`
+- `docs/ARCHITECTURE.md`
+- `docs/CONTROL_LOGIC.md`
+- `docs/EDGE_GATEWAY.md`
+- `docs/SIMULATION.md`
+- `docs/API.md`
+- `docs/MIGRATION_NOTES.md`
 
 ## Key Assets
-- API contract: `openapi/openapi.v1.yaml`
 - Migrations: `db/migrations/`
 - Backend source: `src/energy_api/`
-- ROI calculator source: `src/roi_calculator/`
+- Control modules: `src/energy_api/control/`
+- Simulation engine: `src/energy_api/simulation/`
 - Frontend source: `ui/`
 
-## Partner Onboarding
-- Quick start: `PARTNER_QUICK_START.md`
-- Integration summary: `PARTNER_INTEGRATION_SUMMARY.md`
+## Prerequisites
+- Python `>=3.11`
+- Node.js `>=20`
+- Docker + Docker Compose (for full stack)
+
+## Environment setup
+1. Copy or edit `.env.example`.
+2. Ensure `EA_DATABASE_URL` points to a running Postgres.
+
+## Run with docker-compose
+```bash
+docker compose up --build
+```
+
+Services:
+- API: `http://localhost:8000`
+- Swagger UI: `http://localhost:8000/docs`
+- UI: `http://localhost:5173`
+
+## Run API locally (without Docker)
+```bash
+python -m pip install -e .
+energy-api
+```
+
+## Run UI locally
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+## Run a local simulation (no hardware)
+Use either:
+- HTTP: `POST /api/v1/sites/{site_id}/simulation/run`
+- Python import: `from energy_api.simulation import run_simulation, SimulatedSite`
+
+## Connect a real device
+Current repository state:
+- Device protocol metadata and point mapping schema are implemented in DB tables.
+- Real Modbus transport, edge polling daemon, and MQTT broker client are not yet implemented in runtime code.
+
+## API quick checks
+- `GET /health`
+- `POST /api/v1/auth/dev-token`
+- `POST /api/v1/sites`
+- `POST /api/v1/telemetry/ingest`
+- `POST /api/v1/sites/{site_id}/optimize/run`
+
+## Migration status
+Legacy domain modules from the prior platform were retired from runtime.
+See `docs/MIGRATION_NOTES.md` for the endpoint and module migration map.

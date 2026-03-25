@@ -1,6 +1,6 @@
-# EnergyIQ Clean Frontend
+# SmartGrid Frontend
 
-A cleaned-up React/Vite frontend extracted from the original single-file prototype while keeping the same visual design and product scope.
+React/Vite frontend for the consolidated SmartGrid control-loop backend.
 
 ## Run
 
@@ -14,5 +14,5 @@ npm run dev
 - `src/app` — app shell and page routing
 - `src/components` — layout and reusable UI
 - `src/features` — domain pages
-- `src/mocks` — temporary mock data aligned to the v1 API contract
+- `src/mocks` — temporary mock data aligned to the `/api/v1` contract
 - `src/styles` — extracted design tokens and global styles

@@ -73,7 +73,7 @@ export default function PortfolioPage() {
           </div>
         </Card>
         <Card title="SAVING BY FACILITY">
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
             {facilities.map((facility) => (
               <div key={facility.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
                 <div style={{ width: 110, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{facility.name}</div>

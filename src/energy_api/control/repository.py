@@ -1,0 +1,601 @@
+# Author: Jerry Onyango
+# Contribution: Implements PostgreSQL persistence and schema bootstrap for control-loop entities, telemetry, commands, runs, and savings snapshots.
+
+# /Users/loan/Desktop/energyallocation/src/energy_api/control/repository.py
+from __future__ import annotations
+
+import os
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import psycopg
+from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
+
+
+def _db_url() -> str:
+    return os.getenv(
+        "EA_DATABASE_URL",
+        "postgresql://energyallocation:energyallocation@localhost:5432/energyallocation",
+    )
+
+
+class ControlRepository:
+    def __init__(self, db_url: str | None = None) -> None:
+        self._db_url = db_url or _db_url()
+        self._ensure_control_schema()
+
+    def _connect(self):
+        return psycopg.connect(self._db_url, row_factory=dict_row, autocommit=True)
+
+    def _ensure_control_schema(self) -> None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS sites (
+                      id TEXT PRIMARY KEY,
+                      organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
+                      name TEXT NOT NULL,
+                      timezone TEXT NOT NULL DEFAULT 'UTC',
+                      polling_interval_seconds INT NOT NULL DEFAULT 300,
+                      reserve_soc_min NUMERIC(6,2) NOT NULL DEFAULT 20,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+
+                    CREATE TABLE IF NOT EXISTS assets (
+                      id TEXT PRIMARY KEY,
+                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                      asset_type TEXT NOT NULL,
+                      name TEXT NOT NULL,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+
+                    CREATE TABLE IF NOT EXISTS devices (
+                      id TEXT PRIMARY KEY,
+                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                      asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
+                      device_type TEXT NOT NULL,
+                      protocol TEXT NOT NULL DEFAULT 'modbus_tcp',
+                      polling_interval_seconds INT NOT NULL DEFAULT 300,
+                      timeout_seconds INT NOT NULL DEFAULT 10,
+                      status TEXT NOT NULL DEFAULT 'online',
+                      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+
+                    CREATE TABLE IF NOT EXISTS telemetry_streams (
+                      id TEXT PRIMARY KEY,
+                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                      device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
+                      canonical_key TEXT NOT NULL,
+                      unit TEXT,
+                      is_critical BOOLEAN NOT NULL DEFAULT FALSE,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      UNIQUE(site_id, canonical_key)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS telemetry_points (
+                      id BIGSERIAL PRIMARY KEY,
+                      stream_id TEXT NOT NULL REFERENCES telemetry_streams(id) ON DELETE CASCADE,
+                      ts TIMESTAMPTZ NOT NULL,
+                      value DOUBLE PRECISION NOT NULL,
+                      unit TEXT,
+                      quality TEXT NOT NULL,
+                      ingested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      UNIQUE(stream_id, ts)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS point_mappings (
+                      id TEXT PRIMARY KEY,
+                      device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+                      source_key TEXT NOT NULL,
+                      canonical_key TEXT NOT NULL,
+                      value_type TEXT NOT NULL DEFAULT 'float32',
+                      scale_factor DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+                      byte_order TEXT NOT NULL DEFAULT 'big',
+                      word_order TEXT NOT NULL DEFAULT 'big',
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      UNIQUE(device_id, source_key)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS tariffs (
+                      id TEXT PRIMARY KEY,
+                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                      import_price_eur_kwh DOUBLE PRECISION NOT NULL,
+                      export_price_eur_kwh DOUBLE PRECISION NOT NULL,
+                      valid_from TIMESTAMPTZ,
+                      valid_to TIMESTAMPTZ,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+
+                    CREATE TABLE IF NOT EXISTS control_policies (
+                      id TEXT PRIMARY KEY,
+                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                      active BOOLEAN NOT NULL DEFAULT TRUE,
+                      reserve_soc_min DOUBLE PRECISION NOT NULL DEFAULT 20,
+                      high_price_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.30,
+                      low_price_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.12,
+                      battery_temp_max_c DOUBLE PRECISION NOT NULL DEFAULT 45,
+                      max_charge_kw DOUBLE PRECISION NOT NULL DEFAULT 3,
+                      max_discharge_kw DOUBLE PRECISION NOT NULL DEFAULT 3,
+                      pending_ack_block_seconds INT NOT NULL DEFAULT 30,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+
+                    CREATE TABLE IF NOT EXISTS optimization_runs (
+                      id TEXT PRIMARY KEY,
+                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                      mode TEXT NOT NULL,
+                      horizon_minutes INT NOT NULL,
+                      step_minutes INT NOT NULL,
+                      action_type TEXT NOT NULL,
+                      target_power_kw DOUBLE PRECISION,
+                      score_json JSONB NOT NULL,
+                      explanation JSONB NOT NULL,
+                      state_json JSONB NOT NULL,
+                      command_id TEXT,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+
+                    CREATE TABLE IF NOT EXISTS commands (
+                      id TEXT PRIMARY KEY,
+                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                      device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
+                      command_type TEXT NOT NULL,
+                      target_power_kw DOUBLE PRECISION,
+                      target_soc DOUBLE PRECISION,
+                      reason TEXT,
+                      status TEXT NOT NULL,
+                      idempotency_key TEXT,
+                      failure_reason TEXT,
+                      requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      sent_at TIMESTAMPTZ,
+                      acked_at TIMESTAMPTZ,
+                      UNIQUE(site_id, idempotency_key)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS savings_snapshots (
+                      id TEXT PRIMARY KEY,
+                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                      window_start TIMESTAMPTZ NOT NULL,
+                      window_end TIMESTAMPTZ NOT NULL,
+                      baseline_cost DOUBLE PRECISION NOT NULL,
+                      optimized_cost DOUBLE PRECISION NOT NULL,
+                      savings_percent DOUBLE PRECISION NOT NULL,
+                      battery_cycles DOUBLE PRECISION NOT NULL,
+                      self_consumption_percent DOUBLE PRECISION NOT NULL,
+                      peak_demand_reduction DOUBLE PRECISION NOT NULL,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+
+                    CREATE INDEX IF NOT EXISTS idx_telemetry_points_stream_ts
+                    ON telemetry_points(stream_id, ts DESC);
+                    """
+                )
+
+    @staticmethod
+    def _id(prefix: str) -> str:
+        return f"{prefix}_{os.urandom(4).hex()}"
+
+    def upsert_site_defaults(self, site_id: str) -> None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO sites(id, name)
+                    VALUES (%s, %s)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    (site_id, f"Site {site_id}"),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO control_policies(id, site_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    (f"pol_{site_id}", site_id),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO devices(id, site_id, device_type)
+                    VALUES (%s, %s, 'battery_inverter')
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    (f"dev_{site_id}", site_id),
+                )
+
+                canonical_keys = [
+                    "pv_kw",
+                    "load_kw",
+                    "battery_soc",
+                    "battery_power_kw",
+                    "grid_import_kw",
+                    "grid_export_kw",
+                    "battery_temp_c",
+                    "price_import",
+                    "price_export",
+                ]
+                for key in canonical_keys:
+                    cur.execute(
+                        """
+                        INSERT INTO telemetry_streams(id, site_id, device_id, canonical_key, is_critical)
+                        VALUES (%s, %s, %s, %s, true)
+                        ON CONFLICT (site_id, canonical_key) DO NOTHING
+                        """,
+                        (f"str_{site_id}_{key}", site_id, f"dev_{site_id}", key),
+                    )
+
+    def get_active_policy(self, site_id: str) -> dict[str, Any]:
+        self.upsert_site_defaults(site_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT * FROM control_policies
+                    WHERE site_id = %s AND active = true
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    (site_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise RuntimeError("active control policy not found")
+                return row
+
+    def list_sites(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM sites ORDER BY created_at DESC")
+                return cur.fetchall()
+
+    def get_site(self, site_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM sites WHERE id = %s", (site_id,))
+                return cur.fetchone()
+
+    def create_site(self, site_id: str, name: str, timezone: str, reserve_soc_min: float, polling_interval_seconds: int) -> dict[str, Any]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO sites(id, name, timezone, reserve_soc_min, polling_interval_seconds)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (id)
+                    DO UPDATE SET
+                      name = EXCLUDED.name,
+                      timezone = EXCLUDED.timezone,
+                      reserve_soc_min = EXCLUDED.reserve_soc_min,
+                      polling_interval_seconds = EXCLUDED.polling_interval_seconds,
+                      updated_at = now()
+                    RETURNING *
+                    """,
+                    (site_id, name, timezone, reserve_soc_min, polling_interval_seconds),
+                )
+                created = cur.fetchone()
+
+                cur.execute(
+                    """
+                    INSERT INTO control_policies(
+                      id, site_id, reserve_soc_min
+                    ) VALUES (%s, %s, %s)
+                    ON CONFLICT (id)
+                    DO UPDATE SET reserve_soc_min = EXCLUDED.reserve_soc_min, updated_at = now()
+                    """,
+                    (f"pol_{site_id}", site_id, reserve_soc_min),
+                )
+                return created
+
+    def create_device(self, site_id: str, device_type: str, protocol: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        device_id = self._id("dev")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO devices(id, site_id, device_type, protocol, metadata)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING *
+                    """,
+                    (device_id, site_id, device_type, protocol, Jsonb(metadata or {})),
+                )
+                return cur.fetchone()
+
+    def get_polling_interval(self, site_id: str) -> int:
+        self.upsert_site_defaults(site_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT polling_interval_seconds FROM sites WHERE id = %s", (site_id,))
+                row = cur.fetchone()
+                return int(row["polling_interval_seconds"]) if row else 300
+
+    def get_primary_device_id(self, site_id: str) -> str:
+        self.upsert_site_defaults(site_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM devices
+                    WHERE site_id = %s
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                    """,
+                    (site_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise RuntimeError("device not found")
+                return str(row["id"])
+
+    def resolve_stream_ids(self, site_id: str, canonical_keys: list[str]) -> dict[str, dict[str, Any]]:
+        if not canonical_keys:
+            return {}
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, canonical_key, unit, is_critical, device_id
+                    FROM telemetry_streams
+                    WHERE site_id = %s AND canonical_key = ANY(%s)
+                    """,
+                    (site_id, canonical_keys),
+                )
+                rows = cur.fetchall()
+        return {row["canonical_key"]: row for row in rows}
+
+    def insert_telemetry_points(self, rows: list[dict[str, Any]]) -> int:
+        if not rows:
+            return 0
+        inserted = 0
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                for row in rows:
+                    cur.execute(
+                        """
+                        INSERT INTO telemetry_points(stream_id, ts, value, unit, quality)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (stream_id, ts) DO NOTHING
+                        RETURNING id
+                        """,
+                        (
+                            row["stream_id"],
+                            row["ts"],
+                            row["value"],
+                            row.get("unit"),
+                            row["quality"],
+                        ),
+                    )
+                    if cur.fetchone() is not None:
+                        inserted += 1
+        return inserted
+
+    def get_latest_state_rows(self, site_id: str) -> dict[str, dict[str, Any]]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT s.canonical_key, s.is_critical, p.ts, p.value, p.quality
+                    FROM telemetry_streams s
+                    LEFT JOIN LATERAL (
+                        SELECT ts, value, quality
+                        FROM telemetry_points p
+                        WHERE p.stream_id = s.id
+                        ORDER BY ts DESC
+                        LIMIT 1
+                    ) p ON true
+                    WHERE s.site_id = %s
+                    """,
+                    (site_id,),
+                )
+                rows = cur.fetchall()
+        return {row["canonical_key"]: row for row in rows}
+
+    def get_last_sent_unacked_command(self, device_id: str, block_seconds: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM commands
+                    WHERE device_id = %s
+                      AND status IN ('queued', 'sent')
+                      AND acked_at IS NULL
+                      AND requested_at >= %s
+                    ORDER BY requested_at DESC
+                    LIMIT 1
+                    """,
+                    (device_id, datetime.now(UTC) - timedelta(seconds=block_seconds)),
+                )
+                return cur.fetchone()
+
+    def create_command(
+        self,
+        site_id: str,
+        device_id: str,
+        command_type: str,
+        target_power_kw: float | None,
+        target_soc: float | None,
+        reason: str,
+        idempotency_key: str | None,
+    ) -> dict[str, Any]:
+        command_id = self._id("cmd")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO commands(
+                      id, site_id, device_id, command_type, target_power_kw,
+                      target_soc, reason, status, idempotency_key
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'queued', %s)
+                    RETURNING *
+                    """,
+                    (
+                        command_id,
+                        site_id,
+                        device_id,
+                        command_type,
+                        target_power_kw,
+                        target_soc,
+                        reason,
+                        idempotency_key,
+                    ),
+                )
+                return cur.fetchone()
+
+    def update_command_status(self, command_id: str, status: str, failure_reason: str | None = None) -> dict[str, Any]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                sent_at = datetime.now(UTC) if status == "sent" else None
+                acked_at = datetime.now(UTC) if status == "acked" else None
+                cur.execute(
+                    """
+                    UPDATE commands
+                    SET status = %s,
+                        failure_reason = COALESCE(%s, failure_reason),
+                        sent_at = COALESCE(%s, sent_at),
+                        acked_at = COALESCE(%s, acked_at)
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (status, failure_reason, sent_at, acked_at, command_id),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise RuntimeError("command not found")
+                return row
+
+    def get_command(self, command_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM commands WHERE id = %s", (command_id,))
+                return cur.fetchone()
+
+    def create_optimization_run(
+        self,
+        site_id: str,
+        mode: str,
+        horizon_minutes: int,
+        step_minutes: int,
+        action_type: str,
+        target_power_kw: float,
+        score_json: dict[str, Any],
+        explanation: dict[str, Any],
+        state_json: dict[str, Any],
+        command_id: str | None,
+    ) -> str:
+        run_id = self._id("opt")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO optimization_runs(
+                      id, site_id, mode, horizon_minutes, step_minutes, action_type,
+                      target_power_kw, score_json, explanation, state_json, command_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        run_id,
+                        site_id,
+                        mode,
+                        horizon_minutes,
+                        step_minutes,
+                        action_type,
+                        target_power_kw,
+                        Jsonb(score_json),
+                        Jsonb(explanation),
+                        Jsonb(state_json),
+                        command_id,
+                    ),
+                )
+        return run_id
+
+    def list_optimization_runs(self, site_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM optimization_runs
+                    WHERE site_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (site_id, limit),
+                )
+                return cur.fetchall()
+
+    def list_commands(self, site_id: str, start: datetime, end: datetime) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM commands
+                    WHERE site_id = %s
+                      AND requested_at BETWEEN %s AND %s
+                    ORDER BY requested_at ASC
+                    """,
+                    (site_id, start, end),
+                )
+                return cur.fetchall()
+
+    def average_import_price(self, site_id: str) -> float:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT import_price_eur_kwh
+                    FROM tariffs
+                    WHERE site_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    (site_id,),
+                )
+                row = cur.fetchone()
+                return float(row["import_price_eur_kwh"]) if row else 0.20
+
+    def upsert_savings_snapshot(
+        self,
+        site_id: str,
+        start: datetime,
+        end: datetime,
+        baseline_cost: float,
+        optimized_cost: float,
+        savings_percent: float,
+        battery_cycles: float,
+        self_consumption_percent: float,
+        peak_demand_reduction: float,
+    ) -> str:
+        snapshot_id = self._id("sav")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO savings_snapshots(
+                      id, site_id, window_start, window_end,
+                      baseline_cost, optimized_cost, savings_percent,
+                      battery_cycles, self_consumption_percent, peak_demand_reduction
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        snapshot_id,
+                        site_id,
+                        start,
+                        end,
+                        baseline_cost,
+                        optimized_cost,
+                        savings_percent,
+                        battery_cycles,
+                        self_consumption_percent,
+                        peak_demand_reduction,
+                    ),
+                )
+        return snapshot_id

@@ -1,21 +1,23 @@
-# Backend Structure (Deployment-Oriented)
+# Backend Structure (Current)
 
-## Service Layout
-- `src/energy_api/main.py` — FastAPI bootstrap, router wiring, runtime startup
-- `src/energy_api/routers/` — API boundary by domain (auth, onboarding, ingestion, modeling, recommendations, monitoring, integrations, public)
-- `src/energy_api/services/` — domain orchestration and policy logic (`retraining_service.py`)
-- `src/energy_api/repositories/` — persistence abstractions (`retraining_repository.py`)
-- `src/energy_api/core/` — environment config and structured logging
-- `src/energy_api/audit.py` — centralized audit event recording helper
-- `src/ml_pipeline/` — modular model path (`pipeline.py` baseline + `production.py` batch artifact path)
-- `scripts/` — operational scripts for smoke checks and batch train/predict
-- `db/migrations/` — SQL migrations for schema and RLS policies
+## Service layout
+- `src/energy_api/main.py` — FastAPI bootstrap and router registration
+- `src/energy_api/routers/auth.py` — dev token endpoint (`/api/v1/auth/dev-token`)
+- `src/energy_api/routers/control_loop.py` — canonical control-loop API surface (`/api/v1`)
+- `src/energy_api/control/` — state engine, rule engine, dispatcher, repository
+- `src/energy_api/savings/service.py` — savings summary computation
+- `src/energy_api/simulation/engine.py` — deterministic in-memory simulation
+- `src/energy_api/core/` — config and logging
+- `db/migrations/` — SQL migrations, including control-loop schema
+- `ui/` — frontend app consuming `/api/v1`
 
-## Why this structure
-- Keeps API, domain policy, and storage concerns separate.
-- Enables migration from in-memory adapters to PostgreSQL repositories without rewriting router contracts.
-- Aligns with async job model and batch-first orchestration.
+## Runtime model
+1. Telemetry is ingested and persisted.
+2. Site state is assembled from latest streams.
+3. Rule engine selects action.
+4. Dispatcher sends/blocks/retries commands.
+5. Optimization and savings snapshots are stored.
 
-## Current status
-- API contract includes async jobs, idempotency semantics, role scopes, public business intake endpoints, and retraining monitoring.
-- Retraining trigger automation is active in model-run workflow and propagates to drift/alert/retraining job records.
+## Consolidation status
+Legacy backend modules and old ML/ROI packages are retired from runtime.
+See `docs/MIGRATION_NOTES.md` for detailed migration mapping.

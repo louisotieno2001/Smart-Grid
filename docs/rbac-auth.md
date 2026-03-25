@@ -1,42 +1,28 @@
 # Auth and RBAC Model
 
 ## Supported roles
-Client-side:
+Application roles:
 - `client_admin`
 - `facility_manager`
 - `energy_analyst`
 - `viewer`
 
-Internal:
+Operational roles:
 - `ops_admin`
 - `ml_engineer`
-- `customer_success`
-- `support_analyst`
 
 ## Authentication methods
-- JWT bearer tokens (OAuth2-compatible shape for API usage)
-- service API keys via `X-API-Key` (for machine jobs/internal adapters)
+- JWT bearer tokens
+- Dev token bootstrap endpoint for local usage: `POST /api/v1/auth/dev-token`
 
 ## Authorization semantics
 - Role checks at endpoint boundary via `require_roles(...)`.
-- Tenant scope checks:
-  - client scope: `enforce_client_scope`
-  - facility scope: `enforce_facility_scope`
-- Internal roles can perform cross-tenant ops for support and ML operations.
+- Endpoint permissions are enforced directly by router dependency declarations.
 
 ## Auditing
-Write flows record audit events for:
-- facility creation
-- connector attachment
-- appliance creation
-- import submission
-- model run start/completion
-- recommendation decision/implementation
-- public demo/pricing request intake
-
-Audit payload includes actor, action, resource, and metadata.
+Command, optimization, and savings state are persisted in database tables (`commands`, `optimization_runs`, `savings_snapshots`).
 
 ## Production hardening notes
 - Replace dev-token endpoint with full OAuth2 issuer integration.
-- Rotate API keys and JWT secrets through a vault.
+- Rotate JWT secrets through vault/KMS.
 - Enforce short JWT TTL + refresh strategy for UI users.
