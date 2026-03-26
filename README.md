@@ -62,7 +62,9 @@ Use either:
 ## Connect a real device
 Current repository state:
 - Device protocol metadata and point mapping schema are implemented in DB tables.
-- Real Modbus transport, edge polling daemon, and MQTT broker client are not yet implemented in runtime code.
+- Edge runtime modules are implemented under `src/energy_api/edge/` (Modbus adapter, decoder, poller, staleness, SQLite buffer/replay, startup recovery, command reconciliation, observability).
+- Fault-injection Modbus simulator is available in `src/energy_api/edge/simulation/modbus_server.py` with tests under `tests/edge/`.
+- MQTT broker transport and edge process containerization in `docker-compose.yml` are not yet implemented.
 
 ## API quick checks
 - `GET /health`
