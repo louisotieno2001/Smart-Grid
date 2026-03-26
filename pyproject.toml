@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
 	"fastapi>=0.116.0",
 	"httpx>=0.28.0",
+	"pymodbus>=3.6.8",
 	"psycopg[binary]>=3.2.0",
 	"PyJWT>=2.9.0",
 	"uvicorn[standard]>=0.35.0",
