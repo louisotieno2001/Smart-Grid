@@ -12,6 +12,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U energyallocation -d energyallocation"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+      
 
   api:
     build:
@@ -21,7 +28,8 @@ services:
     env_file:
       - .env.example
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "8000:8000"
 
