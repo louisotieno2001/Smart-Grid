@@ -13,6 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 
 INTERNAL_ROLES = {"ops_admin", "ml_engineer", "support_analyst", "customer_success"}
+SUPER_ROLES = {"admin"}
 DEFAULT_JWT_SECRET = "dev-secret-change-me"
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -134,6 +135,8 @@ def require_roles(*allowed: str):
     allowed_roles = set(allowed)
 
     def dependency(principal: Principal = Depends(get_current_principal)) -> Principal:
+        if principal.roles & SUPER_ROLES:
+            return principal
         if principal.roles.isdisjoint(allowed_roles):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
         return principal
