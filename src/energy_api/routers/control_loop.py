@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from energy_api.control import CommandDispatcher, ControlRepository, RuleEngine, StateEngine
@@ -92,6 +92,14 @@ class OptimizeRunIn(BaseModel):
     allow_export: bool = True
     reserve_soc_min: float = 20.0
     forecast_peak: bool = False
+
+
+class SimulationRunIn(BaseModel):
+    mode: Literal["simulation", "backtest"] = "simulation"
+    horizon_minutes: int = 60
+    step_minutes: int | None = 5
+    allow_export: bool = True
+    reserve_soc_min: float = 20.0
 
 
 class SiteIn(BaseModel):
@@ -552,12 +560,11 @@ def savings_summary(
 @router.post("/sites/{site_id}/simulation/run")
 def run_site_simulation(
     site_id: str,
-    payload: SimulationRunBody,
+    payload: SimulationRunIn = Body(...),
     _principal: dict[str, Any] = Depends(
         require_roles("client_admin", "facility_manager", "energy_analyst", "ops_admin", "ml_engineer")
     ),
 ) -> dict[str, Any]:
-    # helper endpoint for local validation of simulation engine without DB coupling
     demand = [3.2, 3.5, 3.0, 2.8, 3.1, 3.7, 3.9, 4.0, 3.8, 3.4, 3.0, 2.9]
     solar = [0.0, 0.1, 0.3, 0.8, 1.4, 2.3, 2.8, 2.6, 2.0, 1.2, 0.4, 0.1]
     tariff = [0.09, 0.09, 0.11, 0.12, 0.15, 0.24, 0.31, 0.34, 0.32, 0.20, 0.14, 0.10]
@@ -572,7 +579,7 @@ def run_site_simulation(
             tariff_profile=tariff,
             initial_soc=50,
         ),
-        step_minutes=payload.step_minutes or 5,
+        step_minutes=payload.step_minutes if payload.step_minutes is not None else 5,
     )
     
     repo = ControlRepository()
