@@ -47,6 +47,8 @@
   padding: 16px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .stat-label {

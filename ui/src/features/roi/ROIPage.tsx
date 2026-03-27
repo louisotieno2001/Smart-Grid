@@ -51,8 +51,8 @@ function InputField({ label, value, onChange, min, max, step, unit }: {
   unit?: string;
 }) {
   return (
-    <div style={{ marginBottom: 12 }}>
-      <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 4 }}>{label}</label>
+    <div className="form-group">
+      <label className="form-label">{label}</label>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <input
           type="number"
@@ -64,7 +64,7 @@ function InputField({ label, value, onChange, min, max, step, unit }: {
           className="form-input"
           style={{ flex: 1 }}
         />
-        {unit && <span style={{ fontSize: 12, color: "#666" }}>{unit}</span>}
+        {unit && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{unit}</span>}
       </div>
     </div>
   );
@@ -80,15 +80,16 @@ function ResultCard({ label, value, unit, highlight }: {
     <div
       className="stat-card"
       style={{
-        background: highlight ? "#e8f5e9" : "#f5f5f5",
-        border: highlight ? "2px solid #2e7d32" : "1px solid #ddd",
-        textAlign: "center"
+        background: highlight ? "var(--success-bg)" : "var(--card-bg)",
+        border: highlight ? "2px solid var(--success)" : "1px solid var(--border)",
+        textAlign: "center",
+        overflow: "hidden"
       }}
     >
       <div className="stat-label">{label}</div>
-      <div className="stat-value" style={{ color: highlight ? "#2e7d32" : "#333", fontSize: 24 }}>
+      <div className="stat-value" style={{ color: highlight ? "var(--success)" : "var(--text)", fontSize: 18, wordBreak: "break-word", lineHeight: 1.2 }}>
         {typeof value === "number" ? value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : value}
-        {unit && <span style={{ fontSize: 14, marginLeft: 4 }}>{unit}</span>}
+        {unit && <span style={{ fontSize: 12, marginLeft: 4 }}>{unit}</span>}
       </div>
     </div>
   );
@@ -140,18 +141,16 @@ export function ROIPage() {
     <div className="page-content">
       <PageHeader title="ROI Calculator" subtitle={siteId} />
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div className="tabs">
         <button
           onClick={() => setActiveTab("calculator")}
-          className={activeTab === "calculator" ? "logout-button" : "form-button"}
-          style={{ width: "auto" }}
+          className={`tab ${activeTab === "calculator" ? "active" : ""}`}
         >
           Calculator
         </button>
         <button
           onClick={() => setActiveTab("scenarios")}
-          className={activeTab === "scenarios" ? "logout-button" : "form-button"}
-          style={{ width: "auto" }}
+          className={`tab ${activeTab === "scenarios" ? "active" : ""}`}
         >
           Saved Scenarios
         </button>
@@ -189,18 +188,18 @@ export function ROIPage() {
             <InputField label="Inflation Rate" value={input.timeline.inflation_rate * 100} onChange={(v) => updateTimeline("inflation_rate", v / 100)} min={0} max={100} unit="%" />
           </Card>
 
-          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8 }}>
+          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 12 }}>
             <button
               onClick={() => calculateMutation.mutate()}
               disabled={calculateMutation.isPending}
-              className="logout-button"
+              className="btn btn-primary"
             >
               {calculateMutation.isPending ? <LoadingSpinner /> : "Calculate ROI"}
             </button>
             <button
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending || !result}
-              className="form-button"
+              className="btn btn-secondary"
             >
               Save Scenario
             </button>
@@ -221,10 +220,8 @@ export function ROIPage() {
               {scenariosQuery.data?.items.map((scenario) => (
                 <div
                   key={scenario.id}
+                  className="card"
                   style={{
-                    border: "1px solid #ddd",
-                    borderRadius: 8,
-                    padding: 16,
                     display: "grid",
                     gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr auto",
                     gap: 16,
@@ -233,25 +230,25 @@ export function ROIPage() {
                 >
                   <div>
                     <div style={{ fontWeight: 600 }}>{scenario.name}</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
                       {scenario.battery_capacity_kwh}kWh / {scenario.solar_capacity_kwp}kWp
                     </div>
                   </div>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 12, color: "#666" }}>Annual Savings</div>
-                    <div style={{ fontWeight: 600, color: "#2e7d32" }}>${scenario.annual_savings?.toLocaleString()}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Annual Savings</div>
+                    <div style={{ fontWeight: 600, color: "var(--success)" }}>${scenario.annual_savings?.toLocaleString()}</div>
                   </div>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 12, color: "#666" }}>Payback</div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Payback</div>
                     <div style={{ fontWeight: 600 }}>{scenario.payback_years} yrs</div>
                   </div>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 12, color: "#666" }}>ROI</div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>ROI</div>
                     <div style={{ fontWeight: 600 }}>{scenario.roi_percentage}%</div>
                   </div>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 12, color: "#666" }}>NPV</div>
-                    <div style={{ fontWeight: 600, color: scenario.npv && scenario.npv > 0 ? "#2e7d32" : "#c62828" }}>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>NPV</div>
+                    <div style={{ fontWeight: 600, color: scenario.npv && scenario.npv > 0 ? "var(--success)" : "var(--error)" }}>
                       ${scenario.npv?.toLocaleString()}
                     </div>
                   </div>
@@ -261,8 +258,7 @@ export function ROIPage() {
                         deleteMutation.mutate(scenario.id);
                       }
                     }}
-                    className="logout-button"
-                    style={{ width: "auto", background: "#c62828" }}
+                    className="btn btn-danger btn-sm"
                   >
                     Delete
                   </button>
@@ -285,31 +281,31 @@ export function ROIPage() {
             </div>
 
             <h4 style={{ marginBottom: 12 }}>Year-by-Year Projection</h4>
-            <div style={{ maxHeight: 400, overflowY: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <div className="data-table-container">
+              <table className="data-table">
                 <thead>
-                  <tr style={{ background: "#f5f5f5", position: "sticky", top: 0 }}>
-                    <th style={{ padding: 8, textAlign: "left", borderBottom: "2px solid #ddd" }}>Year</th>
-                    <th style={{ padding: 8, textAlign: "right", borderBottom: "2px solid #ddd" }}>Annual Savings</th>
-                    <th style={{ padding: 8, textAlign: "right", borderBottom: "2px solid #ddd" }}>Cumulative</th>
-                    <th style={{ padding: 8, textAlign: "right", borderBottom: "2px solid #ddd" }}>NPV</th>
-                    <th style={{ padding: 8, textAlign: "center", borderBottom: "2px solid #ddd" }}>Break-even</th>
+                  <tr>
+                    <th>Year</th>
+                    <th style={{ textAlign: "right" }}>Annual Savings</th>
+                    <th style={{ textAlign: "right" }}>Cumulative</th>
+                    <th style={{ textAlign: "right" }}>NPV</th>
+                    <th style={{ textAlign: "center" }}>Break-even</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.year_by_year.map((year) => (
-                    <tr key={year.year} style={{ background: year.break_even ? "#e8f5e9" : "transparent" }}>
-                      <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>Year {year.year}</td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "right" }}>
+                    <tr key={year.year} style={{ background: year.break_even ? "var(--success-bg)" : "transparent" }}>
+                      <td>Year {year.year}</td>
+                      <td style={{ textAlign: "right" }}>
                         ${year.annual_savings.toLocaleString()}
                       </td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "right", fontWeight: year.break_even ? 600 : 400 }}>
+                      <td style={{ textAlign: "right", fontWeight: year.break_even ? 600 : 400 }}>
                         ${year.cumulative_savings.toLocaleString()}
                       </td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "right" }}>
+                      <td style={{ textAlign: "right" }}>
                         ${year.npv.toLocaleString()}
                       </td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "center" }}>
+                      <td style={{ textAlign: "center" }}>
                         {year.break_even ? "✓" : ""}
                       </td>
                     </tr>
