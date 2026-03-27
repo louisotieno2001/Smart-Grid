@@ -28,167 +28,355 @@ class ControlRepository:
     def _connect(self):
         return psycopg.connect(self._db_url, row_factory=dict_row, autocommit=True)
 
-    def _ensure_control_schema(self) -> None:
+    def _table_exists(self, table_name: str) -> bool:
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS sites (
-                      id TEXT PRIMARY KEY,
-                      organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
-                      name TEXT NOT NULL,
-                      timezone TEXT NOT NULL DEFAULT 'UTC',
-                      polling_interval_seconds INT NOT NULL DEFAULT 300,
-                      reserve_soc_min NUMERIC(6,2) NOT NULL DEFAULT 20,
-                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    );
-
-                    CREATE TABLE IF NOT EXISTS assets (
-                      id TEXT PRIMARY KEY,
-                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-                      asset_type TEXT NOT NULL,
-                      name TEXT NOT NULL,
-                      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    );
-
-                    CREATE TABLE IF NOT EXISTS devices (
-                      id TEXT PRIMARY KEY,
-                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-                      asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
-                      device_type TEXT NOT NULL,
-                      protocol TEXT NOT NULL DEFAULT 'modbus_tcp',
-                      polling_interval_seconds INT NOT NULL DEFAULT 300,
-                      timeout_seconds INT NOT NULL DEFAULT 10,
-                      status TEXT NOT NULL DEFAULT 'online',
-                      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    );
-
-                    CREATE TABLE IF NOT EXISTS telemetry_streams (
-                      id TEXT PRIMARY KEY,
-                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-                      device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
-                      canonical_key TEXT NOT NULL,
-                      unit TEXT,
-                      is_critical BOOLEAN NOT NULL DEFAULT FALSE,
-                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                      UNIQUE(site_id, canonical_key)
-                    );
-
-                    CREATE TABLE IF NOT EXISTS telemetry_points (
-                      id BIGSERIAL PRIMARY KEY,
-                      stream_id TEXT NOT NULL REFERENCES telemetry_streams(id) ON DELETE CASCADE,
-                      ts TIMESTAMPTZ NOT NULL,
-                      value DOUBLE PRECISION NOT NULL,
-                      unit TEXT,
-                      quality TEXT NOT NULL,
-                      ingested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                      UNIQUE(stream_id, ts)
-                    );
-
-                    CREATE TABLE IF NOT EXISTS point_mappings (
-                      id TEXT PRIMARY KEY,
-                      device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
-                      source_key TEXT NOT NULL,
-                      canonical_key TEXT NOT NULL,
-                      value_type TEXT NOT NULL DEFAULT 'float32',
-                      scale_factor DOUBLE PRECISION NOT NULL DEFAULT 1.0,
-                      byte_order TEXT NOT NULL DEFAULT 'big',
-                      word_order TEXT NOT NULL DEFAULT 'big',
-                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                      UNIQUE(device_id, source_key)
-                    );
-
-                    CREATE TABLE IF NOT EXISTS tariffs (
-                      id TEXT PRIMARY KEY,
-                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-                      import_price_eur_kwh DOUBLE PRECISION NOT NULL,
-                      export_price_eur_kwh DOUBLE PRECISION NOT NULL,
-                      valid_from TIMESTAMPTZ,
-                      valid_to TIMESTAMPTZ,
-                      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    );
-
-                    CREATE TABLE IF NOT EXISTS control_policies (
-                      id TEXT PRIMARY KEY,
-                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-                      active BOOLEAN NOT NULL DEFAULT TRUE,
-                      reserve_soc_min DOUBLE PRECISION NOT NULL DEFAULT 20,
-                      high_price_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.30,
-                      low_price_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.12,
-                      battery_temp_max_c DOUBLE PRECISION NOT NULL DEFAULT 45,
-                      max_charge_kw DOUBLE PRECISION NOT NULL DEFAULT 3,
-                      max_discharge_kw DOUBLE PRECISION NOT NULL DEFAULT 3,
-                      pending_ack_block_seconds INT NOT NULL DEFAULT 30,
-                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    );
-
-                    CREATE TABLE IF NOT EXISTS optimization_runs (
-                      id TEXT PRIMARY KEY,
-                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-                      mode TEXT NOT NULL,
-                      horizon_minutes INT NOT NULL,
-                      step_minutes INT NOT NULL,
-                      action_type TEXT NOT NULL,
-                      target_power_kw DOUBLE PRECISION,
-                      score_json JSONB NOT NULL,
-                      explanation JSONB NOT NULL,
-                      state_json JSONB NOT NULL,
-                      command_id TEXT,
-                      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    );
-
-                    CREATE TABLE IF NOT EXISTS commands (
-                      id TEXT PRIMARY KEY,
-                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-                      device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
-                      command_type TEXT NOT NULL,
-                      target_power_kw DOUBLE PRECISION,
-                      target_soc DOUBLE PRECISION,
-                      reason TEXT,
-                      status TEXT NOT NULL,
-                      idempotency_key TEXT,
-                      failure_reason TEXT,
-                      requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                      sent_at TIMESTAMPTZ,
-                      acked_at TIMESTAMPTZ,
-                      UNIQUE(site_id, idempotency_key)
-                    );
-
-                    CREATE TABLE IF NOT EXISTS savings_snapshots (
-                      id TEXT PRIMARY KEY,
-                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-                      window_start TIMESTAMPTZ NOT NULL,
-                      window_end TIMESTAMPTZ NOT NULL,
-                      baseline_cost DOUBLE PRECISION NOT NULL,
-                      optimized_cost DOUBLE PRECISION NOT NULL,
-                      savings_percent DOUBLE PRECISION NOT NULL,
-                      battery_cycles DOUBLE PRECISION NOT NULL,
-                      self_consumption_percent DOUBLE PRECISION NOT NULL,
-                      peak_demand_reduction DOUBLE PRECISION NOT NULL,
-                      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    );
-
-                    CREATE TABLE IF NOT EXISTS simulations (
-                      id TEXT PRIMARY KEY,
-                      site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-                      baseline_cost DOUBLE PRECISION NOT NULL,
-                      optimized_cost DOUBLE PRECISION NOT NULL,
-                      savings_percent DOUBLE PRECISION NOT NULL,
-                      battery_cycles DOUBLE PRECISION NOT NULL,
-                      self_consumption_percent DOUBLE PRECISION NOT NULL,
-                      peak_demand_reduction DOUBLE PRECISION NOT NULL,
-                      action_history JSONB NOT NULL,
-                      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    );
-
-                    CREATE INDEX IF NOT EXISTS idx_telemetry_points_stream_ts
-                    ON telemetry_points(stream_id, ts DESC);
-                    """
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = %s
+                    ) AS exists_flag
+                    """,
+                    (table_name,),
                 )
+                return cur.fetchone()["exists_flag"]
+
+    def _column_exists(self, table_name: str, column_name: str) -> bool:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = %s 
+                        AND column_name = %s
+                    ) AS exists_flag
+                    """,
+                    (table_name, column_name),
+                )
+                return cur.fetchone()["exists_flag"]
+
+    def _ensure_control_schema(self) -> None:
+        if not self._table_exists("sites"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE sites (
+                          id TEXT PRIMARY KEY,
+                          organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
+                          name TEXT NOT NULL,
+                          timezone TEXT NOT NULL DEFAULT 'UTC',
+                          polling_interval_seconds INT NOT NULL DEFAULT 300,
+                          reserve_soc_min NUMERIC(6,2) NOT NULL DEFAULT 20,
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                        )
+                        """
+                    )
+
+        if not self._table_exists("assets"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE assets (
+                          id TEXT PRIMARY KEY,
+                          site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                          asset_type TEXT NOT NULL,
+                          name TEXT NOT NULL,
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                        )
+                        """
+                    )
+
+        if not self._table_exists("devices"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE devices (
+                          id TEXT PRIMARY KEY,
+                          site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                          asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
+                          device_type TEXT NOT NULL,
+                          protocol TEXT NOT NULL DEFAULT 'modbus_tcp',
+                          polling_interval_seconds INT NOT NULL DEFAULT 300,
+                          timeout_seconds INT NOT NULL DEFAULT 10,
+                          status TEXT NOT NULL DEFAULT 'online',
+                          metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                        )
+                        """
+                    )
+
+        if not self._table_exists("telemetry_streams"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE telemetry_streams (
+                          id TEXT PRIMARY KEY,
+                          site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                          device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
+                          canonical_key TEXT NOT NULL,
+                          unit TEXT,
+                          is_critical BOOLEAN NOT NULL DEFAULT FALSE,
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                          UNIQUE(site_id, canonical_key)
+                        )
+                        """
+                    )
+
+        if not self._table_exists("telemetry_points"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE telemetry_points (
+                          id BIGSERIAL PRIMARY KEY,
+                          stream_id TEXT NOT NULL REFERENCES telemetry_streams(id) ON DELETE CASCADE,
+                          ts TIMESTAMPTZ NOT NULL,
+                          value DOUBLE PRECISION NOT NULL,
+                          unit TEXT,
+                          quality TEXT NOT NULL,
+                          ingested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                          UNIQUE(stream_id, ts)
+                        )
+                        """
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_telemetry_points_stream_ts ON telemetry_points(stream_id, ts DESC)"
+                    )
+
+        if not self._table_exists("point_mappings"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE point_mappings (
+                          id TEXT PRIMARY KEY,
+                          device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+                          source_key TEXT NOT NULL,
+                          canonical_key TEXT NOT NULL,
+                          value_type TEXT NOT NULL DEFAULT 'float32',
+                          scale_factor DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+                          byte_order TEXT NOT NULL DEFAULT 'big',
+                          word_order TEXT NOT NULL DEFAULT 'big',
+                          signed BOOLEAN NOT NULL DEFAULT FALSE,
+                          register_address INT NOT NULL DEFAULT 0,
+                          register_count INT NOT NULL DEFAULT 1,
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                          UNIQUE(device_id, source_key)
+                        )
+                        """
+                    )
+        else:
+            if not self._column_exists("point_mappings", "signed"):
+                with self._connect() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "ALTER TABLE point_mappings ADD COLUMN signed BOOLEAN NOT NULL DEFAULT FALSE"
+                        )
+            if not self._column_exists("point_mappings", "register_address"):
+                with self._connect() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "ALTER TABLE point_mappings ADD COLUMN register_address INT NOT NULL DEFAULT 0"
+                        )
+            if not self._column_exists("point_mappings", "register_count"):
+                with self._connect() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "ALTER TABLE point_mappings ADD COLUMN register_count INT NOT NULL DEFAULT 1"
+                        )
+
+        if not self._table_exists("tariffs"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE tariffs (
+                          id TEXT PRIMARY KEY,
+                          site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                          import_price_eur_kwh DOUBLE PRECISION NOT NULL,
+                          export_price_eur_kwh DOUBLE PRECISION NOT NULL,
+                          valid_from TIMESTAMPTZ,
+                          valid_to TIMESTAMPTZ,
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                        )
+                        """
+                    )
+
+        if not self._table_exists("control_policies"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE control_policies (
+                          id TEXT PRIMARY KEY,
+                          site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                          active BOOLEAN NOT NULL DEFAULT TRUE,
+                          reserve_soc_min DOUBLE PRECISION NOT NULL DEFAULT 20,
+                          high_price_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.30,
+                          low_price_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.12,
+                          battery_temp_max_c DOUBLE PRECISION NOT NULL DEFAULT 45,
+                          max_charge_kw DOUBLE PRECISION NOT NULL DEFAULT 3,
+                          max_discharge_kw DOUBLE PRECISION NOT NULL DEFAULT 3,
+                          pending_ack_block_seconds INT NOT NULL DEFAULT 30,
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                        )
+                        """
+                    )
+
+        if not self._table_exists("optimization_runs"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE optimization_runs (
+                          id TEXT PRIMARY KEY,
+                          site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                          mode TEXT NOT NULL,
+                          horizon_minutes INT NOT NULL,
+                          step_minutes INT NOT NULL,
+                          action_type TEXT NOT NULL,
+                          target_power_kw DOUBLE PRECISION,
+                          score_json JSONB NOT NULL,
+                          explanation JSONB NOT NULL,
+                          state_json JSONB NOT NULL,
+                          command_id TEXT,
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                        )
+                        """
+                    )
+
+        if not self._table_exists("commands"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE commands (
+                          id TEXT PRIMARY KEY,
+                          site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                          device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
+                          command_type TEXT NOT NULL,
+                          target_power_kw DOUBLE PRECISION,
+                          target_soc DOUBLE PRECISION,
+                          reason TEXT,
+                          status TEXT NOT NULL,
+                          idempotency_key TEXT,
+                          failure_reason TEXT,
+                          requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                          sent_at TIMESTAMPTZ,
+                          acked_at TIMESTAMPTZ,
+                          UNIQUE(site_id, idempotency_key)
+                        )
+                        """
+                    )
+
+        if not self._table_exists("savings_snapshots"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE savings_snapshots (
+                          id TEXT PRIMARY KEY,
+                          site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                          window_start TIMESTAMPTZ NOT NULL,
+                          window_end TIMESTAMPTZ NOT NULL,
+                          baseline_cost DOUBLE PRECISION NOT NULL,
+                          optimized_cost DOUBLE PRECISION NOT NULL,
+                          savings_percent DOUBLE PRECISION NOT NULL,
+                          battery_cycles DOUBLE PRECISION NOT NULL,
+                          self_consumption_percent DOUBLE PRECISION NOT NULL,
+                          peak_demand_reduction DOUBLE PRECISION NOT NULL,
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                        )
+                        """
+                    )
+
+        if not self._table_exists("simulations"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE simulations (
+                          id TEXT PRIMARY KEY,
+                          site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                          baseline_cost DOUBLE PRECISION NOT NULL,
+                          optimized_cost DOUBLE PRECISION NOT NULL,
+                          savings_percent DOUBLE PRECISION NOT NULL,
+                          battery_cycles DOUBLE PRECISION NOT NULL,
+                          self_consumption_percent DOUBLE PRECISION NOT NULL,
+                          peak_demand_reduction DOUBLE PRECISION NOT NULL,
+                          action_history JSONB NOT NULL,
+                          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                        )
+                        """
+                    )
+
+        if not self._table_exists("alerts"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE alerts (
+                            id TEXT PRIMARY KEY,
+                            site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                            alert_type TEXT NOT NULL,
+                            severity TEXT NOT NULL CHECK (severity IN ('info', 'warning', 'critical')),
+                            state TEXT NOT NULL CHECK (state IN ('open', 'acknowledged', 'resolved')),
+                            title TEXT NOT NULL,
+                            message TEXT NOT NULL,
+                            source_key TEXT,
+                            threshold_value DOUBLE PRECISION,
+                            actual_value DOUBLE PRECISION,
+                            acknowledged_by TEXT,
+                            acknowledged_at TIMESTAMPTZ,
+                            resolved_by TEXT,
+                            resolved_at TIMESTAMPTZ,
+                            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                        )
+                        """
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_alerts_site_state ON alerts(site_id, state, severity)"
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_alerts_open ON alerts(site_id, severity, created_at DESC) WHERE state = 'open'"
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at DESC)"
+                    )
+
+        if not self._table_exists("edge_gateways"):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE edge_gateways (
+                            id TEXT PRIMARY KEY,
+                            site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+                            name TEXT NOT NULL,
+                            host TEXT NOT NULL,
+                            port INT NOT NULL DEFAULT 502,
+                            status TEXT NOT NULL DEFAULT 'offline',
+                            last_seen_at TIMESTAMPTZ,
+                            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                        )
+                        """
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_edge_gateway_site ON edge_gateways(site_id)"
+                    )
 
     @staticmethod
     def _id(prefix: str) -> str:
@@ -787,3 +975,223 @@ class ControlRepository:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM simulations WHERE id = %s", (sim_id,))
                 return cur.fetchone()
+
+    def create_alert(
+        self,
+        site_id: str,
+        alert_type: str,
+        severity: str,
+        title: str,
+        message: str,
+        source_key: str | None = None,
+        threshold_value: float | None = None,
+        actual_value: float | None = None,
+    ) -> dict[str, Any]:
+        alert_id = self._id("alrt")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO alerts(
+                        id, site_id, alert_type, severity, state, title, message,
+                        source_key, threshold_value, actual_value
+                    ) VALUES (%s, %s, %s, %s, 'open', %s, %s, %s, %s, %s)
+                    RETURNING *
+                    """,
+                    (
+                        alert_id,
+                        site_id,
+                        alert_type,
+                        severity,
+                        title,
+                        message,
+                        source_key,
+                        threshold_value,
+                        actual_value,
+                    ),
+                )
+                return cur.fetchone()
+
+    def list_alerts(self, site_id: str, state: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                query = "SELECT * FROM alerts WHERE site_id = %s"
+                params: list[Any] = [site_id]
+                if state:
+                    query += " AND state = %s"
+                    params.append(state)
+                query += " ORDER BY created_at DESC LIMIT %s"
+                params.append(limit)
+                cur.execute(query, params)
+                return cur.fetchall()
+
+    def get_alert(self, alert_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM alerts WHERE id = %s", (alert_id,))
+                return cur.fetchone()
+
+    def acknowledge_alert(self, alert_id: str, acknowledged_by: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE alerts
+                    SET state = 'acknowledged', acknowledged_by = %s, acknowledged_at = now()
+                    WHERE id = %s AND state = 'open'
+                    RETURNING *
+                    """,
+                    (acknowledged_by, alert_id),
+                )
+                return cur.fetchone()
+
+    def resolve_alert(self, alert_id: str, resolved_by: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE alerts
+                    SET state = 'resolved', resolved_by = %s, resolved_at = now()
+                    WHERE id = %s AND state IN ('open', 'acknowledged')
+                    RETURNING *
+                    """,
+                    (resolved_by, alert_id),
+                )
+                return cur.fetchone()
+
+    def count_open_alerts(self, site_id: str) -> dict[str, int]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT severity, COUNT(*) as count
+                    FROM alerts
+                    WHERE site_id = %s AND state = 'open'
+                    GROUP BY severity
+                    """,
+                    (site_id,),
+                )
+                rows = cur.fetchall()
+        result = {"info": 0, "warning": 0, "critical": 0}
+        for row in rows:
+            result[row["severity"]] = int(row["count"])
+        return result
+
+    def create_edge_gateway(self, site_id: str, name: str, host: str, port: int) -> dict[str, Any]:
+        gateway_id = self._id("gw")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO edge_gateways(id, site_id, name, host, port, status)
+                    VALUES (%s, %s, %s, %s, %s, 'offline')
+                    RETURNING *
+                    """,
+                    (gateway_id, site_id, name, host, port),
+                )
+                return cur.fetchone()
+
+    def list_edge_gateways(self, site_id: str) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM edge_gateways WHERE site_id = %s ORDER BY created_at DESC",
+                    (site_id,),
+                )
+                return cur.fetchall()
+
+    def get_edge_gateway(self, gateway_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM edge_gateways WHERE id = %s", (gateway_id,))
+                return cur.fetchone()
+
+    def update_edge_gateway_heartbeat(self, gateway_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE edge_gateways
+                    SET status = 'online', last_seen_at = now(), updated_at = now()
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (gateway_id,),
+                )
+                return cur.fetchone()
+
+    def update_edge_gateway_status(self, gateway_id: str, status: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE edge_gateways
+                    SET status = %s, updated_at = now()
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (status, gateway_id),
+                )
+                return cur.fetchone()
+
+    def create_device_mapping(
+        self,
+        device_id: str,
+        source_key: str,
+        canonical_key: str,
+        scale_factor: float = 1.0,
+        byte_order: str = "big",
+        word_order: str = "big",
+        value_type: str = "float32",
+        signed: bool = False,
+        register_address: int = 0,
+        register_count: int = 1,
+        unit: str | None = None,
+    ) -> dict[str, Any]:
+        mapping_id = self._id("map")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO point_mappings(
+                        id, device_id, source_key, canonical_key, scale_factor,
+                        byte_order, word_order, value_type, signed,
+                        register_address, register_count
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING *
+                    """,
+                    (
+                        mapping_id,
+                        device_id,
+                        source_key,
+                        canonical_key,
+                        scale_factor,
+                        byte_order,
+                        word_order,
+                        value_type,
+                        signed,
+                        register_address,
+                        register_count,
+                    ),
+                )
+                row = cur.fetchone()
+                if unit and row:
+                    row = dict(row)
+                    row["unit"] = unit
+                return row
+
+    def list_point_mappings(self, device_id: str) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM point_mappings WHERE device_id = %s ORDER BY source_key",
+                    (device_id,),
+                )
+                return cur.fetchall()
+
+    def delete_point_mapping(self, mapping_id: str) -> bool:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM point_mappings WHERE id = %s RETURNING id", (mapping_id,))
+                return cur.fetchone() is not None

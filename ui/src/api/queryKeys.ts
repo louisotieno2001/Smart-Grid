@@ -9,5 +9,8 @@ export const queryKeys = {
   optimizationRunDetail: (runId: string) => ["optimization", "run", runId] as const,
   commands: (siteId: string) => ["commands", siteId] as const,
   savings: (siteId: string) => ["savings", siteId] as const,
-  simulation: (siteId: string, simId: string) => ["simulation", siteId, simId] as const
+  simulation: (siteId: string, simId: string) => ["simulation", siteId, simId] as const,
+  alerts: (siteId: string) => ["alerts", siteId] as const,
+  alertCounts: (siteId: string) => ["alerts", siteId, "count"] as const,
+  alert: (alertId: string) => ["alerts", "detail", alertId] as const
 } as const;
