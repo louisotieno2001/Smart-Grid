@@ -32,14 +32,20 @@ flowchart TD
 - Stale/missing critical telemetry: `online=False`, rule engine enters safe mode (`idle`).
 - Pending unacknowledged command: dispatcher blocks new command.
 - Dispatch retries exhausted: command status set `failed` with `failure_reason`.
+- Edge replay retry path applies exponential backoff via edge replay/storage services.
+- Edge command processing supports deduplication and unresolved-command safety gating.
 
-## Failure modes and fallback behavior (not implemented)
-- Edge local SQLite buffering and replay: NOT IMPLEMENTED.
-- Real Modbus transport with reconnect/backoff: NOT IMPLEMENTED (simulated send path only).
-- Real MQTT broker publish/ack loop: NOT IMPLEMENTED (publish metadata only).
+## Failure modes and fallback behavior (remaining gaps)
+- Edge modules are implemented in `src/energy_api/edge/`, but the API service does not yet run an always-on edge runtime loop by default.
+- MQTT broker publish/ack loop remains a production blocker when MQTT transport is required.
+- Operational hardening is pending: long-run supervision, field runbooks, and soak-test evidence.
 
 ## Deployment topology (current)
 - API container: `Dockerfile`, service `api` in `docker-compose.yml`.
 - Postgres container: service `postgres` with SQL init from `db/migrations/`.
 - UI container: service `ui` serving Vite dev server.
-- Separate edge Docker container: NOT IMPLEMENTED.
+
+## Edge runtime implementation status (March 2026)
+- Implemented modules: `modbus_adapter`, `decoder`, `poller`, `staleness`, `replay`, `commands`, `runtime`, and SQLite-backed storage in `src/energy_api/edge/`.
+- Edge runtime behavior is currently validated primarily through `tests/edge/` and `scripts/edge_poll_demo.py`.
+- Separate edge process/container deployment path is not yet fully operationalized.
