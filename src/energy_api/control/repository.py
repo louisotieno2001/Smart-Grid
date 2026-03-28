@@ -380,6 +380,7 @@ class ControlRepository:
 
     @staticmethod
     def _id(prefix: str) -> str:
+        # use a more robust ID generation strategy (e.g., UUIDs, ULIDs) to ensure uniqueness and avoid collisions. Here, we use a simple random hex string for demonstration purposes.
         return f"{prefix}_{os.urandom(4).hex()}"
 
     def upsert_site_defaults(self, site_id: str) -> None:
@@ -712,6 +713,9 @@ class ControlRepository:
                 )
                 return cur.fetchall()
 
+    # To prevent command spamming, we check if there's a recently sent command for the same device that hasn't 
+    # been acknowledged yet. If such a command exists and was requested within the block_seconds window, we can 
+    # choose to block the new command or handle it according to your application's needs (e.g., queue it, replace the old command, etc.).
     def get_last_sent_unacked_command(self, device_id: str, block_seconds: int) -> dict[str, Any] | None:
         with self._connect() as conn:
             with conn.cursor() as cur:

@@ -23,6 +23,16 @@ class StartupRecoveryResult:
     reconciled_commands: int
     replay_queue_rebuilt: int
 
+# The EdgeRuntime class serves as the central orchestrator for the edge device's 
+# operations. It manages the lifecycle of the edge runtime, including startup 
+# recovery to handle any pending telemetry or unresolved commands, 
+# periodic polling of devices to collect telemetry data, processing of 
+# incoming control commands with safety checks and reconciliation, and 
+# maintaining observability metrics for monitoring the health and performance 
+# of the edge runtime. The run_poll_cycle method is designed to be called in a 
+# loop (e.g., every few seconds) to continuously operate the edge runtime, while 
+# submit_command can be called by external systems to send control commands to the 
+# edge device.
 
 @dataclass
 class EdgeRuntime:

@@ -12,6 +12,7 @@ from .repository import ControlRepository
 
 
 class CommandDispatcher:
+    # In a real implementation, this would interface with actual device communication layers (e.g., MQTT, Modbus) to send commands to devices. Here, we simulate the sending and acknowledgment process.
     def __init__(self, repository: ControlRepository | None = None) -> None:
         self.repository = repository or ControlRepository()
         self.max_retries = int(os.getenv("EA_COMMAND_MAX_RETRIES", "3"))

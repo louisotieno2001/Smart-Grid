@@ -8,6 +8,7 @@ from .models import ScoreBreakdown, ScoredAction, SiteState
 
 
 class RuleEngine:
+    # use a rules engine library or a machine learning model. Currently, we implement a simple rule-based approach for demonstration purposes.
     def evaluate(self, state: SiteState, policy: dict[str, object], forecast_peak: bool = False) -> ScoredAction:
         reserve_min = float(policy.get("reserve_soc_min", 20.0))
         high_price_threshold = float(policy.get("high_price_threshold", 0.30))
@@ -16,7 +17,7 @@ class RuleEngine:
         max_discharge_kw = float(policy.get("max_discharge_kw", 3.0))
         battery_temp_max_c = float(policy.get("battery_temp_max_c", 45.0))
 
-        if (not state.online) or (state.battery_temp_c > battery_temp_max_c):
+        if (not state.online) or (state.battery_temp_c > battery_temp_max_c): # safety halt if telemetry is offline or battery temperature is too high, regardless of other conditions
             score = self._score(
                 state=state,
                 action_type="idle",

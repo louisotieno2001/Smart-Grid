@@ -10,7 +10,18 @@ from .storage.sqlite import EdgeSQLiteStore
 
 UploadFn = Callable[[str, dict], None]
 
-
+'''
+The ReplayService class provides a mechanism for buffering telemetry 
+data locally on the edge device and reliably uploading it to the 
+control loop. The buffer_telemetry method allows adding new telemetry 
+records to the local store, while the replay_once method attempts to 
+upload pending records in order, with retry and backoff logic for 
+handling failures. The rebuild_queue_snapshot method can be used to 
+inspect the current state of the pending telemetry queue, which is 
+useful for monitoring and debugging. The backoff strategy uses 
+exponential backoff with configurable base and maximum limits 
+to avoid overwhelming the network or control loop during transient issues.
+'''
 @dataclass
 class ReplayService:
     store: EdgeSQLiteStore

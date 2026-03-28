@@ -10,7 +10,13 @@ from .modbus_adapter import ModbusAdapter, ModbusAdapterError
 from .staleness import StalenessTracker
 from .types import PointMapping, TelemetryRecord
 
-
+# The EdgePoller class is responsible for performing a single polling cycle of 
+# the edge runtime. It reads data from devices using the ModbusAdapter, 
+# decodes the raw register values into meaningful telemetry using 
+# the Decoder, and applies staleness logic to determine the freshness 
+# of the data. The poll_once method returns a list of TelemetryRecord 
+# objects that encapsulate the results of the polling cycle, 
+# including any errors or quality issues encountered during reading or decoding.
 @dataclass
 class EdgePoller:
     adapter: ModbusAdapter

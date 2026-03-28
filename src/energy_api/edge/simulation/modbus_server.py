@@ -49,6 +49,7 @@ class SimulatedModbusDevice:
         self._context = ModbusServerContext(devices={1: self._device_context}, single=False)
         self._thread: threading.Thread | None = None
 
+    # The server runs in a daemon thread, so it will automatically stop when the main program exits.
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
