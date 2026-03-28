@@ -73,13 +73,40 @@ Current repository state:
 - Full production rollout work is now mostly integration/deployment hardening, not core edge module scaffolding.
 
 ## API quick checks
+Health and authentication:
 - `GET /health`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/dev-token`
+
+Site, devices, and telemetry:
 - `POST /api/v1/sites`
+- `GET /api/v1/sites`
 - `POST /api/v1/telemetry/ingest`
+- `GET /api/v1/sites/{site_id}/telemetry/latest`
+
+Optimization and commands:
 - `POST /api/v1/sites/{site_id}/optimize/run`
+- `GET /api/v1/sites/{site_id}/optimize/runs`
+- `POST /api/v1/sites/{site_id}/commands`
+- `GET /api/v1/sites/{site_id}/savings/summary`
+
+Alerts:
+- `POST /api/v1/sites/{site_id}/alerts`
+- `GET /api/v1/sites/{site_id}/alerts`
+- `PATCH /api/v1/alerts/{alert_id}/acknowledge`
+
+Edge (gateways and point mappings):
+- `POST /api/v1/sites/{site_id}/gateways`
+- `GET /api/v1/sites/{site_id}/edge/health`
+
+ROI calculator:
+- `POST /api/v1/sites/{site_id}/roi/calculate`
+- `POST /api/v1/sites/{site_id}/roi/scenarios`
+
+Users and management:
+- `GET /api/v1/users`
+- `POST /api/v1/users/invite`
 
 ## Migration status
 Legacy domain modules from the prior platform were retired from runtime.

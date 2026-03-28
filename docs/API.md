@@ -80,6 +80,111 @@
 }
 ```
 
+## Alerts endpoints
+
+### POST /api/v1/sites/{site_id}/alerts
+- Auth: `client_admin | facility_manager | ops_admin | ml_engineer`
+- Request:
+```json
+{
+  "alert_type": "high_temp",
+  "severity": "warning",
+  "title": "Battery Temperature High",
+  "message": "Battery temperature exceeded threshold",
+  "source_key": "battery_temp_c",
+  "threshold_value": 45.0,
+  "actual_value": 48.5
+}
+```
+- Response: alert object with `id`, `state` (open|acknowledged|resolved)
+
+### GET /api/v1/sites/{site_id}/alerts
+- Auth: `client_admin | facility_manager | energy_analyst | viewer | ops_admin | ml_engineer`
+- Query params: `state` (open|acknowledged|resolved), `limit` (default 100)
+- Response: `{"items": [...]}`
+
+### GET /api/v1/sites/{site_id}/alerts/count
+- Auth: `client_admin | facility_manager | energy_analyst | viewer | ops_admin | ml_engineer`
+- Response: severity breakdown of open alerts
+
+### PATCH /api/v1/alerts/{alert_id}/acknowledge
+- Auth: `client_admin | facility_manager | ops_admin | ml_engineer`
+- Response: alert with `state=acknowledged`
+
+### PATCH /api/v1/alerts/{alert_id}/resolve
+- Auth: `client_admin | facility_manager | ops_admin | ml_engineer`
+- Response: alert with `state=resolved`
+
+## Edge management endpoints
+
+### POST /api/v1/sites/{site_id}/gateways
+- Auth: `client_admin | ops_admin`
+- Creates an edge gateway for the site
+- See [docs/EDGE_GATEWAY.md](EDGE_GATEWAY.md) for full gateway lifecycle endpoints
+
+### GET /api/v1/sites/{site_id}/gateways
+- Auth: `client_admin | facility_manager | energy_analyst | viewer | ops_admin | ml_engineer`
+- Lists gateways for site
+
+### POST /api/v1/devices/{device_id}/mappings
+- Auth: `client_admin | facility_manager | ops_admin | ml_engineer`
+- Creates a canonical point mapping from Modbus register to telemetry key
+- See [docs/EDGE_GATEWAY.md](EDGE_GATEWAY.md) for mapping schema
+
+### GET /api/v1/devices/{device_id}/mappings
+- Auth: `client_admin | facility_manager | energy_analyst | viewer | ops_admin | ml_engineer`
+- Lists point mappings for device
+
+### GET /api/v1/sites/{site_id}/edge/health
+- Auth: `client_admin | facility_manager | energy_analyst | viewer | ops_admin | ml_engineer`
+- Returns edge runtime health summary: gateway count/status, device count, mapping count
+
+## ROI Calculator endpoints
+
+### POST /api/v1/sites/{site_id}/roi/calculate
+- Auth: `client_admin | facility_manager | energy_analyst | ops_admin | ml_engineer`
+- Request: financial system/usage/timeline params (see router implementation for full schema)
+- Response: `{"annual_savings", "payback_years", "roi_percentage", "npv", "irr_percentage", "year_by_year"}`
+
+### POST /api/v1/sites/{site_id}/roi/scenarios
+- Auth: `client_admin | facility_manager | energy_analyst | ops_admin | ml_engineer`
+- Creates and persists an ROI scenario for later analysis
+
+### GET /api/v1/sites/{site_id}/roi/scenarios
+- Auth: `client_admin | facility_manager | energy_analyst | viewer | ops_admin | ml_engineer`
+- Lists saved ROI scenarios for site
+
+### GET /api/v1/roi/scenarios/{scenario_id}
+- Auth: `client_admin | facility_manager | energy_analyst | viewer | ops_admin | ml_engineer`
+- Gets scenario details with live ROI calculation
+
+### DELETE /api/v1/roi/scenarios/{scenario_id}
+- Auth: `client_admin | facility_manager | ops_admin`
+- Deletes a saved scenario
+
+## Users and membership endpoints
+
+### GET /api/v1/users
+- Auth: `client_admin | admin | owner`
+- Lists users in current organization
+
+### GET /api/v1/users/{user_id}
+- Auth: `client_admin | admin | owner | facility_manager`
+- Gets user details and role
+
+### PATCH /api/v1/users/{user_id}
+- Auth: `client_admin | admin | owner`
+- Updates user `full_name`, `role`, or `status`
+
+### POST /api/v1/users/invite
+- Auth: `client_admin | admin | owner`
+- Invites a user by email; returns invitation token and expiration
+
+### GET /api/v1/users/invitations
+- Auth: `client_admin | admin | owner`
+- Lists pending invitations
+
 ## Canonical namespace
 - Canonical backend namespace is `/api/v1`.
+- All six service routers (auth, control_loop, alerts, edge, roi, users) are mounted under this namespace.
 - Legacy routes and old OpenAPI contract file were retired.

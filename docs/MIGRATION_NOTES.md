@@ -4,9 +4,13 @@
 Retire the legacy backend surface and keep `/api/v1` control-loop backend as canonical runtime.
 
 ## Startup consolidation
-- `src/energy_api/main.py` now mounts only:
-  - `auth` (`/api/v1/auth`)
-  - `control_loop` (`/api/v1`)
+- `src/energy_api/main.py` now mounts six canonical routers under `/api/v1`:
+  - `auth` — authentication
+  - `control_loop` — telemetry, optimization, commands, savings
+  - `alerts` — alert system
+  - `edge` — edge gateway and point mapping management
+  - `roi` — ROI calculator and scenarios
+  - `users` — user and membership management
 
 ## Retired backend modules
 - Routers removed:
