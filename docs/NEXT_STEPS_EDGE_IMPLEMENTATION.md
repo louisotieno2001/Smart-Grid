@@ -1,23 +1,28 @@
 # Next Steps: Edge Runtime Implementation Plan
 
 ## Objective
-Implement a production-ready edge execution path that complements the current cloud control loop by adding:
-- Modbus adapter
-- Point-mapping decoder
-- Polling loop
-- Stale telemetry handling
-- Reconnect/backoff
-- Command reconciliation
-- MQTT or direct edge messaging
-- Local buffer/replay
+Productionize the edge execution path by wiring existing edge modules into a durable, deployable runtime and closing operational gaps (messaging, deployment, observability, and field validation).
 
-This plan is designed to move from the current simulated transport to reliable field operation with deterministic failure behavior.
+This plan now assumes core edge modules already exist and focuses on runtime integration and rollout hardening.
 
 ## Current baseline (already in repo)
 - Cloud API and control loop exist under `/api/v1`.
 - `point_mappings` table and core telemetry/control tables already exist.
 - Rule safe mode is implemented when telemetry is stale/missing.
-- Real edge process, Modbus transport, MQTT runtime wiring, and local buffering are not implemented yet.
+- Edge package exists at `src/energy_api/edge/` with runtime, Modbus adapter, decoder, poller, staleness tracker, replay service, command executor, and SQLite storage.
+- Edge router endpoints for gateways and point mappings exist under `/api/v1`.
+- Edge-focused tests currently pass in `tests/edge/`.
+- Remaining gaps are primarily production wiring and operations (standalone service lifecycle, transport mode hardening, and field runbooks).
+
+## Reality sync status (March 2026)
+- Phase 1 (Modbus adapter): Implemented in code; additional soak testing recommended.
+- Phase 2 (decoder): Implemented in code; continue widening golden test matrix for vendor variants.
+- Phase 3 (polling loop): Implemented in core module; still needs always-on process supervision in deployment.
+- Phase 4 (staleness handling): Implemented in module path and should be validated against real field telemetry cadence.
+- Phase 5 (backoff/retry): Implemented for replay path; verify policy tuning in production conditions.
+- Phase 6 (command reconciliation): Implemented in runtime/command paths; complete API-to-edge lifecycle validation.
+- Phase 7 (messaging mode): Still a true blocker for production if MQTT is required.
+- Phase 8 (buffer/replay): Implemented with SQLite-backed storage and replay service.
 
 ## Target architecture
 
@@ -298,8 +303,8 @@ Introduce edge config profile with:
 - Documented runbook for outage recovery and troubleshooting.
 
 ## Suggested immediate tasks (next sprint)
-- Create `src/energy_api/edge/` package scaffold.
-- Implement `modbus_adapter.py` + `decoder.py` with unit tests.
-- Implement `poller.py` and send batches to `/api/v1/telemetry/ingest`.
-- Add `buffer.py` SQLite persistence and replay worker.
-- Add basic command fetch/apply/ack path with idempotency journal.
+- Add a dedicated edge runner entrypoint and process supervisor strategy (systemd/container).
+- Wire runtime publish/fetch to the selected transport mode (`http` first or `mqtt`), then document failover behavior.
+- Validate end-to-end command lifecycle between API command intents and edge reconciliation/ack states.
+- Add production observability export (structured metrics/log shipping) and alert thresholds.
+- Run a multi-day soak test with outage/reconnect fault injection and publish an operational runbook.

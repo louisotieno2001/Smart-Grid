@@ -61,8 +61,15 @@ Use either:
 
 ## Connect a real device
 Current repository state:
-- Device protocol metadata and point mapping schema are implemented in DB tables.
-- Real Modbus transport, edge polling daemon, and MQTT broker client are not yet implemented in runtime code.
+- Implemented in code: Modbus TCP adapter, point decoder, poller, staleness tracking, replay/backoff, command execution/reconciliation, and SQLite-backed edge storage under `src/energy_api/edge/`.
+- Implemented in API/data model: gateway and point-mapping endpoints plus edge metadata tables.
+- Remaining blockers for field deployment: standalone edge runner/service wiring, production messaging transport (MQTT or hardened HTTP path), and deployment/runbook hardening for long-running operations.
+
+## Edge runtime status (March 2026)
+- Edge modules are present and tested (unit/integration style tests in `tests/edge/`).
+- Demo flow exists for simulated Modbus polling (`scripts/edge_poll_demo.py`).
+- The main API process does not yet launch an always-on edge runtime loop by default.
+- Full production rollout work is now mostly integration/deployment hardening, not core edge module scaffolding.
 
 ## API quick checks
 - `GET /health`
