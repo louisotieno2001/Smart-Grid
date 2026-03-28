@@ -13,6 +13,7 @@ The repository now treats the control-loop backend as canonical and retires the 
 - `docs/SIMULATION.md`
 - `docs/API.md`
 - `docs/AUTH.md`
+- `docs/data-engineering.md`
 - `docs/MIGRATION_NOTES.md`
 
 ## Key Assets
