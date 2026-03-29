@@ -41,12 +41,44 @@ Services:
 - API: `http://localhost:8000`
 - Swagger UI: `http://localhost:8000/docs`
 - UI: `http://localhost:5173`
+- Edge runtime service: `edge-runtime` (writes status JSON to `/app/data/edge/status.json` in container)
+- Simulated Modbus device: `modbus-sim` on `localhost:15020`
 
 ## Run API locally (without Docker)
 ```bash
 python -m pip install -e .
 energy-api
 ```
+
+## Run edge runtime locally (canonical service entrypoint)
+```bash
+python -m pip install -e .
+energy-edge
+```
+
+Common local environment variables for edge runtime:
+- `EDGE_SITE_ID` (default `site_001`)
+- `EDGE_GATEWAY_ID` (default `gw_edge_01`)
+- `EDGE_MODBUS_HOST` / `EDGE_MODBUS_PORT` (default `127.0.0.1:15020`)
+- `EA_API_BASE_URL` (default `http://localhost:8000`)
+- `EDGE_API_BEARER_TOKEN` (optional bearer token for authenticated ingest)
+- `EDGE_SQLITE_PATH` (default `./data/edge/edge_runtime.db`)
+- `EDGE_STATUS_FILE` (default `./data/edge/status.json`)
+
+Run simulated Modbus locally:
+```bash
+energy-edge-sim
+```
+
+Suggested startup order for local service validation:
+1. `energy-api`
+2. `energy-edge-sim`
+3. `energy-edge`
+
+Health/status visibility:
+- Runtime status snapshots are emitted in logs as `edge_runtime_status`.
+- Runtime status file is written to `EDGE_STATUS_FILE`.
+- Status includes service start, mode, active devices, last poll/replay times, command backlog, queue depth, and fault/degraded state.
 
 ## Run UI locally
 ```bash
@@ -64,13 +96,14 @@ Use either:
 Current repository state:
 - Implemented in code: Modbus TCP adapter, point decoder, poller, staleness tracking, replay/backoff, command execution/reconciliation, and SQLite-backed edge storage under `src/energy_api/edge/`.
 - Implemented in API/data model: gateway and point-mapping endpoints plus edge metadata tables.
-- Remaining blockers for field deployment: standalone edge runner/service wiring, production messaging transport (MQTT or hardened HTTP path), and deployment/runbook hardening for long-running operations.
+- Remaining blockers for field deployment: production messaging transport strategy (MQTT or hardened HTTP path), token provisioning strategy for authenticated ingest, and long-duration operational hardening/runbooks.
 
 ## Edge runtime status (March 2026)
 - Edge modules are present and tested (unit/integration style tests in `tests/edge/`).
 - Demo flow exists for simulated Modbus polling (`scripts/edge_poll_demo.py`).
-- The main API process does not yet launch an always-on edge runtime loop by default.
-- Full production rollout work is now mostly integration/deployment hardening, not core edge module scaffolding.
+- Canonical edge service startup entrypoint is `energy-edge` (`energy_api.edge.main:run`).
+- Runtime supervisor (`EdgeRuntimeSupervisor`) owns startup recovery, poll cycle, replay/sync, command backlog processing, status emission, and graceful shutdown.
+- API process remains separate from edge runtime process by design.
 
 ## API quick checks
 Health and authentication:

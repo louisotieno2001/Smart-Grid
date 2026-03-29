@@ -38,8 +38,7 @@ export function CommandsPage() {
             <option value="">all</option>
             <option value="queued">queued</option>
             <option value="sent">sent</option>
-            <option value="acknowledged">acknowledged</option>
-            <option value="executed">executed</option>
+            <option value="acked">acknowledged</option>
             <option value="failed">failed</option>
           </select>
         </div>

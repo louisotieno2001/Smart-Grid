@@ -19,6 +19,8 @@ dependencies = [
 
 [project.scripts]
 energy-api = "energy_api.main:run"
+energy-edge = "energy_api.edge.main:run"
+energy-edge-sim = "energy_api.edge.simulation.server_main:run"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

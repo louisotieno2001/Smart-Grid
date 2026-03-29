@@ -8,7 +8,7 @@ export const calculateROI = (siteId: string, body: ROIInput) =>
   });
 
 export const createROIScenario = (siteId: string, body: ROIInput) =>
-  apiFetch<{ scenario: ROIScenario; calculation: ROIResult }>(`/api/v1/sites/${siteId}/roi/scenarios`, {
+  apiFetch<ROIScenario>(`/api/v1/sites/${siteId}/roi/scenarios`, {
     method: "POST",
     body: JSON.stringify(body)
   });

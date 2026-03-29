@@ -12,12 +12,13 @@ This plan now assumes core edge modules already exist and focuses on runtime int
 - Edge package exists at `src/energy_api/edge/` with runtime, Modbus adapter, decoder, poller, staleness tracker, replay service, command executor, and SQLite storage.
 - Edge router endpoints for gateways and point mappings exist under `/api/v1`.
 - Edge-focused tests currently pass in `tests/edge/`.
-- Remaining gaps are primarily production wiring and operations (standalone service lifecycle, transport mode hardening, and field runbooks).
+- Edge service entrypoint and supervisor wiring exist (`energy_api.edge.main`, `EdgeRuntimeSupervisor`) with local and Docker startup paths.
+- Remaining gaps are primarily production transport and operations hardening (token strategy, transport mode hardening, and field runbooks).
 
 ## Reality sync status (March 2026)
 - Phase 1 (Modbus adapter): Implemented in code; additional soak testing recommended.
 - Phase 2 (decoder): Implemented in code; continue widening golden test matrix for vendor variants.
-- Phase 3 (polling loop): Implemented in core module; still needs always-on process supervision in deployment.
+- Phase 3 (polling loop): Implemented in core module with service supervision path.
 - Phase 4 (staleness handling): Implemented in module path and should be validated against real field telemetry cadence.
 - Phase 5 (backoff/retry): Implemented for replay path; verify policy tuning in production conditions.
 - Phase 6 (command reconciliation): Implemented in runtime/command paths; complete API-to-edge lifecycle validation.
@@ -303,7 +304,7 @@ Introduce edge config profile with:
 - Documented runbook for outage recovery and troubleshooting.
 
 ## Suggested immediate tasks (next sprint)
-- Add a dedicated edge runner entrypoint and process supervisor strategy (systemd/container).
+- Validate and harden existing `energy-edge` service supervision strategy under multi-day soak conditions.
 - Wire runtime publish/fetch to the selected transport mode (`http` first or `mqtt`), then document failover behavior.
 - Validate end-to-end command lifecycle between API command intents and edge reconciliation/ack states.
 - Add production observability export (structured metrics/log shipping) and alert thresholds.

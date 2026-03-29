@@ -61,7 +61,7 @@ export type TelemetryIngestResponse = {
 };
 
 export type CommandType = "charge" | "discharge" | "idle" | "set_limit" | "set_mode";
-export type CommandStatus = "queued" | "sent" | "acknowledged" | "executed" | "failed" | "rejected";
+export type CommandStatus = "queued" | "sent" | "acked" | "acknowledged" | "executed" | "failed";
 
 export type Command = {
   id: UUID;
