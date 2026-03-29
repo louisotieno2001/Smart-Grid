@@ -1,3 +1,6 @@
+# Author: Jerry Onyango
+# Contribution: Boots the edge runtime service, wires dependencies, and manages signal-driven shutdown.
+
 from __future__ import annotations
 
 import logging

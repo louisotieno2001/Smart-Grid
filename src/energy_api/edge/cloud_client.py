@@ -1,3 +1,6 @@
+# Author: Jerry Onyango
+# Contribution: Publishes edge telemetry records to the cloud ingest API with optional bearer authentication.
+
 from __future__ import annotations
 
 from typing import Any

@@ -1,3 +1,6 @@
+# Author: Jerry Onyango
+# Contribution: Supervises edge runtime lifecycle loops, status emission, and graceful shutdown sequencing.
+
 from __future__ import annotations
 
 import json

@@ -1,3 +1,6 @@
+# Author: Jerry Onyango
+# Contribution: Loads edge runtime service configuration from environment variables and mapping overrides.
+
 from __future__ import annotations
 
 import json

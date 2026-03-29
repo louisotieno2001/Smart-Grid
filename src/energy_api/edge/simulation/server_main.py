@@ -1,3 +1,6 @@
+# Author: Jerry Onyango
+# Contribution: Starts a runnable simulated Modbus server process with default register seed values for local integration.
+
 from __future__ import annotations
 
 import logging
